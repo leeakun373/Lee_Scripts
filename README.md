@@ -1,5 +1,7 @@
 # Lee Scripts 脚本库
 
+https://github.com/leeakun373/Lee_Scripts/raw/master/index.xml
+
 REAPER Lua脚本集合，按功能分类管理。
 
 ## 📁 目录结构
