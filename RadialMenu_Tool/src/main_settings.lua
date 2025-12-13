@@ -204,7 +204,7 @@ function M.draw()
     local color_count, style_var_count = M.apply_theme()
     
     -- 设置窗口大小和位置
-    reaper.ImGui_SetNextWindowSize(ctx, 1400, 800, reaper.ImGui_Cond_FirstUseEver())
+    reaper.ImGui_SetNextWindowSize(ctx, 1200, 700, reaper.ImGui_Cond_FirstUseEver())
     
     -- 开始窗口
     local visible, open = reaper.ImGui_Begin(ctx, "RadialMenu 设置编辑器", true, reaper.ImGui_WindowFlags_None())

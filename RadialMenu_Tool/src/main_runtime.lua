@@ -99,6 +99,13 @@ function M.init()
     anim_submenu_start_time = 0
     last_submenu_state = false
     
+    -- 初始化启动时默认展开的扇区
+    if config.menu.start_sectors then
+        for _, sector_id in ipairs(config.menu.start_sectors) do
+            sector_anim_states[sector_id] = 1.0  -- 直接设置为完全展开状态
+        end
+    end
+    
     -- 检测并拦截触发按键（参考 Sexan_Pie3000 的实现）
     local key_state = reaper.JS_VKeys_GetState(SCRIPT_START_TIME - 1)
     local down_state = reaper.JS_VKeys_GetDown(SCRIPT_START_TIME)
@@ -417,12 +424,32 @@ function M.draw()
         end
     end
     
-    -- 1. 绘制轮盘 (背景层)
+    -- ============================================================
+    -- 1. 绘制子菜单（先绘制，使其在轮盘下层）
+    -- ============================================================
+    -- [核心] 拖拽逻辑锁：如果正在拖拽，强制保持子菜单打开
+    if is_dragging and clicked_sector then
+        show_submenu = true
+    end
+    
+    -- 子菜单悬停状态（用于防止自动关闭）
+    local is_submenu_hovered = false
+    
+    if show_submenu and clicked_sector then
+        -- list_view.draw_submenu 内部使用了 SetNextWindowPos + Begin
+        -- 这意味着子菜单是一个独立的 ImGui 窗口
+        -- [FIX] Pass 'config' to draw_submenu to avoid file I/O
+        is_submenu_hovered = list_view.draw_submenu(ctx, clicked_sector, center_x, center_y, sub_scale, config)
+    end
+    
+    -- ============================================================
+    -- 2. 绘制轮盘 (上层，遮挡子菜单)
+    -- ============================================================
     local active_id = (show_submenu and clicked_sector) and clicked_sector.id or nil
     wheel.draw_wheel(ctx, config, active_id, is_pinned, anim_scale, sector_anim_states)
     
     -- ============================================================
-    -- 2. 优化拖拽手感：InvisibleButton 覆盖中心
+    -- 3. 优化拖拽手感：InvisibleButton 覆盖中心
     -- ============================================================
     -- 我们在窗口正中心放置一个看不见的按钮，大小等于 inner_radius
     -- 这样可以利用 ImGui 原生的拖拽逻辑，不仅手感好，而且不消耗性能
@@ -491,7 +518,7 @@ function M.draw()
     end
 
     -- ============================================================
-    -- 3. 悬停打开子菜单逻辑 (Hover to Open)
+    -- 4. 悬停打开子菜单逻辑 (Hover to Open)
     -- ============================================================
     -- [核心] 拖拽逻辑锁：如果正在拖拽，完全禁止悬停切换扇区
     if not is_dragging then
@@ -513,37 +540,34 @@ function M.draw()
     end
 
     -- ============================================================
-    -- 4. 绘制子菜单（先绘制以获取悬停状态）
+    -- 5. 子菜单自动消失逻辑优化
     -- ============================================================
-    -- [核心] 拖拽逻辑锁：如果正在拖拽，强制保持子菜单打开
-    if is_dragging and clicked_sector then
-        show_submenu = true
-    end
-    
-    -- 子菜单作为独立的 Window 绘制，或者作为当前 Window 的内容
-    -- 为了避免坐标系混乱，我们在当前 DrawList 上绘制，或者使用 BeginChild
-    
-    -- 子菜单悬停状态（用于防止自动关闭）
-    local is_submenu_hovered = false
-    
-    if show_submenu and clicked_sector then
-        -- list_view.draw_submenu 内部使用了 SetNextWindowPos + Begin
-        -- 这意味着子菜单是一个独立的 ImGui 窗口，这很好！
-        -- 独立窗口不会被主窗口的透明区域遮挡问题影响
-        -- 现在返回悬停状态，以便主运行时知道用户正在与子菜单交互
-        -- [FIX] Pass 'config' to draw_submenu to avoid file I/O
-        is_submenu_hovered = list_view.draw_submenu(ctx, clicked_sector, center_x, center_y, sub_scale, config)
+    -- [核心修复] 检查鼠标是否在扇区或子菜单范围内
+    -- 如果鼠标既不在扇区，也不在子菜单范围内，则关闭子菜单
+    -- [防闪烁优化] 只有当鼠标确实离开所有扇区和子菜单时，才关闭子菜单
+    if show_submenu and clicked_sector and not is_dragging and config.menu.hover_to_open then
+        local hovered_id = wheel.get_hovered_sector_id()
+        local is_hovering_current_sector = (hovered_id == clicked_sector.id)
+        local is_hovering_any_sector = (hovered_id ~= nil)
+        
+        -- [防闪烁] 如果鼠标在任何扇区上，不关闭子菜单（即使不是当前扇区）
+        -- 这样可以避免在扇区间快速移动时出现闪烁
+        -- 只有当鼠标既不在任何扇区，也不在子菜单范围内时，才关闭子菜单
+        if not is_hovering_any_sector and not is_submenu_hovered then
+            show_submenu = false
+            clicked_sector = nil
+        end
     end
     
     -- ============================================================
-    -- 5. 扇区点击逻辑 (Hit Test)
+    -- 6. 扇区点击逻辑 (Hit Test)
     -- ============================================================
     -- 我们需要手动检测扇区点击，因为扇区是画出来的，不是真实的 Button
     -- 传递悬停状态，防止点击子菜单时关闭它
     M.handle_sector_click(center_x, center_y, inner_radius, outer_radius, is_submenu_hovered)
     
     -- ============================================================
-    -- 6. 绘制拖拽视觉反馈和处理放置（在主窗口上）
+    -- 7. 绘制拖拽视觉反馈和处理放置（在主窗口上）
     -- ============================================================
     if list_view.is_dragging() then
         local draw_list = reaper.ImGui_GetWindowDrawList(ctx)

@@ -1,5 +1,5 @@
 -- @description Lee Radial Menu Tool
--- @version 1.0.2
+-- @version 1.0.3
 -- @author Lee
 -- @about
 --   Reaper 强大的自定义轮盘菜单工具
