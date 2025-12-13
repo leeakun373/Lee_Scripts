@@ -2,22 +2,36 @@ name: ReaPack Indexer
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   workflow_dispatch:
 
 jobs:
-  build:
+  reapack-index:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: Run reapack-index
-        uses: cfillion/reapack-index@v1.2.6
+      - name: Fetch repository
+        uses: actions/checkout@v4
         with:
-          version: 1.2.6
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Commit index.xml
-        uses: stefanzweifel/git-auto-commit-action@v4
-        with:
-          commit_message: "Update ReaPack index"
-          file_pattern: index.xml
+          fetch-depth: 0
 
+      - name: Configure git
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+      - name: Install Pandoc
+        run: sudo apt-get install -yy pandoc
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 3.2
+
+      - name: Install reapack-index
+        run: gem install reapack-index
+
+      - name: Update index.xml
+        run: reapack-index --commit
+
+      - name: Push changes
+        run: git push
