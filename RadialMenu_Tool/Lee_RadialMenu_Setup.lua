@@ -1,5 +1,5 @@
 -- @description Lee Radial Menu Tool
--- @version 1.0.1
+-- @version 1.0.2
 -- @author Lee
 -- @about
 --   Reaper 强大的自定义轮盘菜单工具
@@ -8,8 +8,8 @@
 --   [main] Lee_RadialMenu_Setup.lua
 --   Lee_RadialMenu_reset_state.lua
 --   config.example.json
---   src/**
---   utils/**
+--   src/**/*.lua
+--   utils/**/*.lua
 
 -- ============================================================================
 -- 配置初始化：从示例文件创建配置文件（如果不存在）
