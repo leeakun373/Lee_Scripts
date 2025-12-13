@@ -1,0 +1,23 @@
+name: ReaPack Indexer
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run reapack-index
+        uses: cfillion/reapack-index@v1
+        with:
+          version: 1.2.3
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Commit index.xml
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "Update ReaPack index"
+          file_pattern: index.xml
+
