@@ -31,7 +31,7 @@ jobs:
         run: gem install reapack-index
 
       - name: Update index.xml
-        run: reapack-index --name "Lee Scripts" --commit
+        run: reapack-index --name "Lee_Scripts" --commit
 
       - name: Push changes
         run: git push
