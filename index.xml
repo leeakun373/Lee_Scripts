@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="3dc6f14153b62bc3d744be80ea52302893653da8">
+<index version="1" commit="3dc6f14153b62bc3d744be80ea52302893653da8" name="Lee Scripts">
   <category name="Items">
     <reapack name="Lee_Items - Bounce Items.lua" type="script" desc="Render each item in place separately">
       <metadata>
