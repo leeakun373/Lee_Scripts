@@ -1,18 +1,15 @@
 -- @description Lee Radial Menu Tool
--- @version 1.0.0
+-- @version 1.0.1
 -- @author Lee
 -- @about
---   轮盘菜单工具的设置编辑器入口脚本
---   提供可视化界面用于编辑轮盘菜单的配置，包括扇区、插槽、样式等设置
---   独立于主运行脚本，专门用于配置管理
+--   Reaper 强大的自定义轮盘菜单工具
 -- @provides
 --   [main] .
 --   [main] Lee_RadialMenu_Setup.lua
+--   Lee_RadialMenu_reset_state.lua
+--   config.example.json
 --   src/**
 --   utils/**
---   doc/**
---   config.example.json
---   Lee_RadialMenu_reset_state.lua
 
 -- ============================================================================
 -- 配置初始化：从示例文件创建配置文件（如果不存在）

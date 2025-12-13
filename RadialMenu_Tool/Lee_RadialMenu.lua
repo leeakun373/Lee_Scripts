@@ -1,18 +1,15 @@
 -- @description Lee Radial Menu Tool
--- @version 1.0.0
+-- @version 1.0.1
 -- @author Lee
 -- @about
---   轮盘菜单工具的主运行入口脚本
---   提供轮盘式快捷菜单功能，支持快速访问 Actions、FX、Chains、Templates 等资源
---   轻量级运行态，负责显示轮盘界面和执行用户选择的操作
+--   Reaper 强大的自定义轮盘菜单工具
 -- @provides
 --   [main] .
 --   [main] Lee_RadialMenu_Setup.lua
+--   Lee_RadialMenu_reset_state.lua
+--   config.example.json
 --   src/**
 --   utils/**
---   doc/**
---   config.example.json
---   Lee_RadialMenu_reset_state.lua
 
 -- ============================================================================
 -- 配置初始化：从示例文件创建配置文件（如果不存在）
@@ -54,7 +51,7 @@ end
 -- ============================================================================
 -- 版本信息（每次修改后更新 BUILD_NUMBER 以确认生效）
 -- ============================================================================
-local VERSION = "1.0.0"
+local VERSION = "1.0.1"
 local BUILD_DATE = "2024-12-09"  -- 每次修改后更新此日期
 local BUILD_NUMBER = "001"  -- 每次修改后递增此数字（001, 002, 003...）
 
