@@ -108,21 +108,14 @@ function M.draw(ctx, sector, state)
                 state.selected_slot_index = i
             end
             
-            -- Simplified Context Menu (Only Clear)
-            if reaper.ImGui_BeginPopupContextItem(ctx) then
-                if is_real_slot then
-                    if reaper.ImGui_MenuItem(ctx, "清除插槽 (Clear)") then
-                        sector.slots[i] = { type = "empty" }
-                        if state.selected_slot_index == i then state.selected_slot_index = nil end
-                        state.is_modified = true
-                    end
-                else
-                    -- Optional: Fast add for empty slots, or just nothing
-                    if reaper.ImGui_MenuItem(ctx, "添加新 Action") then
-                        sector.slots[i] = { type = "action", name = "新 Action", data = { command_id = 0 } }
-                        state.selected_slot_index = i
-                        state.is_modified = true
-                    end
+            -- Context Menu (Right Click) - Attached directly to button
+            -- [CHANGED] Removed "Add New Action" to enforce drag-and-drop workflow
+            -- Only allow clearing if needed, or just nothing for empty slots
+            if is_real_slot and reaper.ImGui_BeginPopupContextItem(ctx) then
+                if reaper.ImGui_MenuItem(ctx, "清除插槽 (Clear)") then
+                    sector.slots[i] = { type = "empty" }
+                    if state.selected_slot_index == i then state.selected_slot_index = nil end
+                    state.is_modified = true
                 end
                 reaper.ImGui_EndPopup(ctx)
             end
@@ -208,16 +201,8 @@ function M.draw(ctx, sector, state)
                 state.selected_slot_index = i
             end
             
-            -- Context Menu (Right Click) - Attached directly to button
-            if reaper.ImGui_BeginPopupContextItem(ctx) then
-                -- Empty slot options
-                if reaper.ImGui_MenuItem(ctx, "添加新 Action") then
-                    sector.slots[i] = { type = "action", name = "新 Action", data = { command_id = 0 } }
-                    state.selected_slot_index = i
-                    state.is_modified = true
-                end
-                reaper.ImGui_EndPopup(ctx)
-            end
+            -- Context Menu (Right Click) - Removed to enforce drag-and-drop workflow
+            -- Empty slots have no context menu, only drag-and-drop is allowed
             
             if is_selected then
                 reaper.ImGui_PopStyleColor(ctx, 1)

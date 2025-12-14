@@ -29,7 +29,7 @@ end
 -- 包含 6 个扇区，每个扇区 12 个空槽位
 function M.get_default()
     return {
-        version = "1.1.1",
+        version = "1.1.2",
         
         -- 菜单外观设置
         menu = {
@@ -39,7 +39,7 @@ function M.get_default()
             hover_brightness = 1.3,       -- 悬停时亮度增加倍数
             animation_speed = 0.2,        -- 动画速度
             max_slots_per_sector = 9,     -- 每个扇区最大槽位数
-            hover_to_open = false,        -- 悬停打开子菜单（false = 点击打开）
+            hover_to_open = true,         -- 悬停打开子菜单（true = 悬停打开，false = 点击打开）
             -- Sector Expansion Settings
             enable_sector_expansion = true, -- 启用扇区膨胀动画
             hover_expansion_pixels = 10,   -- 悬停时扇区向外扩展的像素数
@@ -63,14 +63,14 @@ function M.get_default()
             text_shadow = {0, 0, 0, 150}
         },
         
-        -- 扇区配置（6个扇区）
+        -- 扇区配置（3个默认扇区）
         sectors = {
             {
                 id = 1,
                 name = "Actions",
                 icon = "⚡",
                 color = {70, 130, 180, 200},  -- Steel Blue
-                slots = {}  -- 空槽位，用户可自定义
+                slots = {}
             },
             {
                 id = 2,
@@ -81,30 +81,9 @@ function M.get_default()
             },
             {
                 id = 3,
-                name = "Scripts",
-                icon = "📜",
-                color = {220, 20, 60, 200},   -- Crimson
-                slots = {}
-            },
-            {
-                id = 4,
-                name = "Tracks",
-                icon = "🎵",
+                name = "View",
+                icon = "👁️",
                 color = {34, 139, 34, 200},   -- Forest Green
-                slots = {}
-            },
-            {
-                id = 5,
-                name = "Markers",
-                icon = "🏷️",
-                color = {255, 140, 0, 200},   -- Dark Orange
-                slots = {}
-            },
-            {
-                id = 6,
-                name = "Tools",
-                icon = "🔧",
-                color = {128, 128, 128, 200}, -- Gray
                 slots = {}
             }
         }

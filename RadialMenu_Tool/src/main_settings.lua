@@ -152,6 +152,7 @@ function M.apply_theme()
     reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_ItemSpacing(), 8, 8)  -- Markers Modern: {8, 8}
     reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_FramePadding(), 10, 6)  -- Markers Modern: {10, 6}
     reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_FrameRounding(), 4)  -- Markers Modern: 4
+    reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_GrabRounding(), 4)   -- Rounded Sliders handles
     reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_WindowRounding(), 6)  -- Markers Modern: 6
     reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_PopupRounding(), 4)  -- Markers Modern: 4
     
@@ -185,7 +186,7 @@ function M.apply_theme()
     reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_TitleBg(), TITLE_BG)
     reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_TitleBgActive(), TITLE_BG_ACTIVE)
     
-    return 13, 6  -- color_count, style_var_count
+    return 13, 7  -- color_count, style_var_count (added GrabRounding)
 end
 
 -- 恢复主题
@@ -268,13 +269,48 @@ function M.draw()
             reaper.ImGui_Separator(ctx)
             reaper.ImGui_Spacing(ctx)
             
-            -- 第二部分：属性栏（Inspector）
+            -- 第二部分：属性栏 (Inspector) - 统一处理 nil 和 empty
             if state.selected_slot_index and state.selected_slot_index >= 1 then
                 local slot = sector.slots[state.selected_slot_index]
-                local is_real_slot = slot and slot.type ~= "empty"
-                if is_real_slot then
+                
+                -- 统一处理：nil 和 empty 都显示提示，只有非 empty 才显示 Inspector
+                if slot and slot.type ~= "empty" then
                     tab_inspector.draw(ctx, slot, state.selected_slot_index, sector, state)
+                else
+                    -- 空插槽或 nil 插槽：显示拖拽提示
+                    reaper.ImGui_Spacing(ctx)
+                    reaper.ImGui_Separator(ctx)
+                    reaper.ImGui_Spacing(ctx)
+                    
+                    local avail_w = reaper.ImGui_GetContentRegionAvail(ctx)
+                    local text = "👋 将 Action 或 FX 拖入上方插槽"
+                    local text_w = reaper.ImGui_CalcTextSize(ctx, text)
+                    local pad_x = (avail_w - text_w) / 2
+                    
+                    if pad_x > 0 then reaper.ImGui_SetCursorPosX(ctx, reaper.ImGui_GetCursorPosX(ctx) + pad_x) end
+                    
+                    reaper.ImGui_TextDisabled(ctx, text)
+                    
+                    -- 子提示
+                    local sub_text = "(支持从下方搜索列表直接拖拽)"
+                    local sub_w = reaper.ImGui_CalcTextSize(ctx, sub_text)
+                    local sub_pad_x = (avail_w - sub_w) / 2
+                    if sub_pad_x > 0 then reaper.ImGui_SetCursorPosX(ctx, reaper.ImGui_GetCursorPosX(ctx) + sub_pad_x) end
+                    
+                    reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_Text(), 0x666666FF)
+                    reaper.ImGui_Text(ctx, sub_text)
+                    reaper.ImGui_PopStyleColor(ctx)
                 end
+            else
+                -- 未选中插槽：初始提示
+                reaper.ImGui_Spacing(ctx)
+                local avail_w = reaper.ImGui_GetContentRegionAvail(ctx)
+                local text = "👇 请从下方搜索 Action 或 FX 并拖入上方网格"
+                local text_w = reaper.ImGui_CalcTextSize(ctx, text)
+                local pad_x = (avail_w - text_w) / 2
+                
+                if pad_x > 0 then reaper.ImGui_SetCursorPosX(ctx, reaper.ImGui_GetCursorPosX(ctx) + pad_x) end
+                reaper.ImGui_TextDisabled(ctx, text)
             end
             
             reaper.ImGui_Spacing(ctx)
@@ -592,98 +628,75 @@ end
 
 -- 绘制编辑器面板（分割为两部分：网格、浏览器）
 function M.draw_editor_panel_split()
-    if not selected_sector_index or selected_sector_index < 1 or selected_sector_index > #config.sectors then
+    if not state.selected_sector_index or state.selected_sector_index < 1 or state.selected_sector_index > #config.sectors then
         reaper.ImGui_TextDisabled(ctx, "请从左侧预览中选择一个扇区进行编辑")
         return
     end
     
-    local sector = config.sectors[selected_sector_index]
-    if not sector then
-        return
-    end
+    local sector = config.sectors[state.selected_sector_index]
+    if not sector then return end
     
-    -- 第一部分：子菜单网格编辑器（固定高度，从顶部开始）
+    -- 1. 网格编辑器
     if reaper.ImGui_BeginChild(ctx, "##EditorGrid", 0, 160, 1, reaper.ImGui_WindowFlags_None()) then
-        M.draw_submenu_grid(sector)
+        -- 传递插槽总数，支持动态扩展
+        tab_grid.draw(ctx, sector, state)
         reaper.ImGui_EndChild(ctx)
     end
     
     reaper.ImGui_Spacing(ctx)
-    
-    -- 第二部分：属性栏（Inspector）- 在网格和浏览器之间
     reaper.ImGui_Separator(ctx)
     reaper.ImGui_Spacing(ctx)
     
-    -- 属性栏内容
-    if selected_slot_index and selected_slot_index >= 1 then
-        local slot = sector.slots[selected_slot_index]
-        -- [FIX] Check if slot exists AND is not an "empty" placeholder
-        local is_real_slot = slot and slot.type ~= "empty"
-        if is_real_slot then
-            -- 选中且已填充：显示编辑界面
-            reaper.ImGui_AlignTextToFramePadding(ctx)
-            reaper.ImGui_Text(ctx, "标签:")
-            reaper.ImGui_SameLine(ctx)
-            
-            local name_buf = slot.name or ""
-            local avail_w = reaper.ImGui_GetContentRegionAvail(ctx)
-            local btn_w = reaper.ImGui_GetFrameHeight(ctx)  -- Square button
-            -- Limit input width to make it look cleaner (max 300px, or remaining space if smaller)
-            local input_w = math.min(300, avail_w - btn_w)
-            
-            -- Design: [InputBox][×] (Tightly packed)
-            -- 1. Draw Input
-            reaper.ImGui_SetNextItemWidth(ctx, input_w)
-            -- Push style to reduce spacing for merge effect
-            reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_ItemSpacing(), 0, 0)
-            
-            local name_changed, new_name = reaper.ImGui_InputText(ctx, "##SlotNameEdit", name_buf, 256)
-            if name_changed then
-                slot.name = new_name
-                is_modified = true
-            end
-            
-            reaper.ImGui_SameLine(ctx, 0, 0)
-            
-            -- 2. Draw Clear Button ("×")
-            -- Use a slightly different color to distinguish action
-            local clear_btn_color = im_utils.color_to_u32(255, 82, 82, 200)  -- Semi-transparent red
-            reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_Button(), clear_btn_color)
-            reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_ButtonHovered(), im_utils.color_to_u32(255, 112, 112, 255))
-            reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_ButtonActive(), im_utils.color_to_u32(229, 57, 53, 255))
-            
-            if reaper.ImGui_Button(ctx, "×", btn_w, 0) then
-                sector.slots[selected_slot_index] = { type = "empty" }
-                selected_slot_index = nil
-                is_modified = true
-            end
-            
-            -- Tooltip for the button
-            if reaper.ImGui_IsItemHovered(ctx) then
-                reaper.ImGui_BeginTooltip(ctx)
-                reaper.ImGui_Text(ctx, "清除此插槽内容")
-                reaper.ImGui_EndTooltip(ctx)
-            end
-            
-            reaper.ImGui_PopStyleColor(ctx, 3)
-            reaper.ImGui_PopStyleVar(ctx, 1)  -- Pop ItemSpacing
+    -- 2. 属性栏 (Inspector) - 逻辑大改：仅在非 Empty 时显示
+    local show_inspector = false
+    
+    if state.selected_slot_index and state.selected_slot_index >= 1 then
+        local slot = sector.slots[state.selected_slot_index]
+        
+        -- [核心修改] 只有当插槽存在且不是 empty 时，才显示编辑器
+        if slot and slot.type ~= "empty" then
+            tab_inspector.draw(ctx, slot, state.selected_slot_index, sector, state)
+            show_inspector = true
         else
-            -- 选中但为空：提示拖放
-            reaper.ImGui_TextDisabled(ctx, "拖放 Action/FX 以分配")
+            -- [Empty Slot State] - User Guide
+            -- Center the text vertically/horizontally for a better look
+            reaper.ImGui_Spacing(ctx)
+            reaper.ImGui_Separator(ctx)
+            reaper.ImGui_Spacing(ctx)
+            
+            -- Padding to center visually
+            local avail_w = reaper.ImGui_GetContentRegionAvail(ctx)
+            local text = "👋 将 Action 或 FX 拖入上方插槽"
+            local text_w = reaper.ImGui_CalcTextSize(ctx, text)
+            local pad_x = (avail_w - text_w) / 2
+            
+            if pad_x > 0 then reaper.ImGui_SetCursorPosX(ctx, reaper.ImGui_GetCursorPosX(ctx) + pad_x) end
+            
+            -- Draw the hint text
+            reaper.ImGui_TextDisabled(ctx, text)
+            
+            -- Sub-hint
+            local sub_text = "(支持从下方列表直接拖拽)"
+            local sub_w = reaper.ImGui_CalcTextSize(ctx, sub_text)
+            local sub_pad_x = (avail_w - sub_w) / 2
+            if sub_pad_x > 0 then reaper.ImGui_SetCursorPosX(ctx, reaper.ImGui_GetCursorPosX(ctx) + sub_pad_x) end
+            
+            reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_Text(), 0x666666FF) -- Darker gray
+            reaper.ImGui_Text(ctx, sub_text)
+            reaper.ImGui_PopStyleColor(ctx)
         end
     else
-        -- 未选中：提示选择
-        reaper.ImGui_TextDisabled(ctx, "在上方选择一个插槽进行编辑，或右键点击插槽查看选项")
+        reaper.ImGui_TextDisabled(ctx, "在上方点击已配置的插槽进行编辑")
     end
     
     reaper.ImGui_Spacing(ctx)
     reaper.ImGui_Separator(ctx)
     reaper.ImGui_Spacing(ctx)
     
-    -- 第三部分：资源浏览器（只包含标签和搜索栏）
+    -- 3. 资源浏览器
     local avail_w, avail_h = reaper.ImGui_GetContentRegionAvail(ctx)
     if reaper.ImGui_BeginChild(ctx, "##EditorBrowser", 0, 0, 1, reaper.ImGui_WindowFlags_None()) then
-        M.draw_resource_browser_simplified(sector)
+        tab_browser.draw(ctx, sector, state)
         reaper.ImGui_EndChild(ctx)
     end
 end
@@ -1512,9 +1525,16 @@ function M.save_config()
     -- [FIX] Preserve slot positions by filling gaps with "empty" placeholders
     for _, sector in ipairs(config.sectors) do
         if sector.slots then
+            -- 找出当前实际拥有的最大插槽数，并至少保持 9 个
+            local real_max = 0
+            for k, _ in pairs(sector.slots) do
+                if type(k) == "number" and k > real_max then real_max = k end
+            end
+            local max_index = math.max(config.menu.max_slots_per_sector or 9, real_max)
+
             local fixed_slots = {}
-            local max_index = config.menu.max_slots_per_sector or 9
             
+            -- 循环将继续填充到 max_index，这样超过 9 的也会被保存
             for i = 1, max_index do
                 if sector.slots[i] and sector.slots[i].type ~= "empty" then
                     table.insert(fixed_slots, sector.slots[i])

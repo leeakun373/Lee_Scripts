@@ -23,6 +23,7 @@ local fx_search_text = ""  -- FX 搜索文本
 local current_fx_filter = "All"  -- 当前 FX 过滤器 (All, VST, VST3, JS, AU, CLAP, LV2, Chain, Template)
 local action_list_clipper = nil  -- ListClipper 缓存（使用 ValidatePtr 验证有效性）
 local fx_list_clipper = nil  -- FX ListClipper 缓存
+local selected_browser_action = nil  -- 浏览器中选中的 Action（用于运行功能）
 
 -- ============================================================================
 -- Action 加载和过滤
@@ -143,12 +144,60 @@ end
 -- @param sector table: 当前扇区
 -- @param state table: 状态对象
 function M.draw_action_browser(ctx, sector, state)
-    -- 搜索框（在 Child 外面，不滚动）
+    -- Toolbar Row: [Native List] [Run] [Search Bar]
+    
+    -- 1. Open Native List Button (Icon style or small text)
+    if reaper.ImGui_Button(ctx, "列表", 0, 0) then
+        reaper.Main_OnCommand(40605, 0) -- Show action list
+    end
+    if reaper.ImGui_IsItemHovered(ctx) then
+        reaper.ImGui_SetTooltip(ctx, "打开 Reaper 原生 Action List")
+    end
+    
+    reaper.ImGui_SameLine(ctx, 0, 4)
+    
+    -- 2. Run Button (Green)
+    local can_run = selected_browser_action ~= nil
+    if not can_run then reaper.ImGui_BeginDisabled(ctx) end
+    
+    reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_Button(), 0x2E7D32FF)
+    if reaper.ImGui_Button(ctx, "运行", 0, 0) then
+        if selected_browser_action then
+            local execution = require("execution")
+            -- Create a temp slot object to reuse execution logic
+            local temp_slot = { type = "action", data = { command_id = selected_browser_action.command_id } }
+            execution.trigger_slot(temp_slot)
+        end
+    end
+    reaper.ImGui_PopStyleColor(ctx)
+    
+    if not can_run then reaper.ImGui_EndDisabled(ctx) end
+    if reaper.ImGui_IsItemHovered(ctx) and can_run then
+        reaper.ImGui_SetTooltip(ctx, "运行选中的 Action: " .. tostring(selected_browser_action.command_id))
+    end
+
+    reaper.ImGui_SameLine(ctx, 0, 4)
+
+    -- 3. Search Bar (Fill remaining width)
+    reaper.ImGui_SetNextItemWidth(ctx, -1)
     local search_changed, new_search = reaper.ImGui_InputText(ctx, "##ActionSearch", action_search_text, 256)
     if search_changed then
         action_search_text = new_search
         -- 重新过滤
         actions_filtered = M.filter_actions(action_search_text)
+        -- 如果选中的 action 不在过滤结果中，清除选择
+        if selected_browser_action then
+            local still_in_list = false
+            for _, action in ipairs(actions_filtered) do
+                if action.command_id == selected_browser_action.command_id then
+                    still_in_list = true
+                    break
+                end
+            end
+            if not still_in_list then
+                selected_browser_action = nil
+            end
+        end
     elseif #actions_filtered == 0 then
         -- 初始化过滤列表
         actions_filtered = M.filter_actions(action_search_text)
@@ -173,9 +222,17 @@ function M.draw_action_browser(ctx, sector, state)
                         local action = actions_filtered[i + 1]
                         local item_label = string.format("%d: %s", action.command_id, action.name or "")
                         
-                        -- 先渲染 Selectable
-                        if reaper.ImGui_Selectable(ctx, item_label, false, reaper.ImGui_SelectableFlags_None(), 0, 0) then
-                            -- 点击选择（可选功能）
+                        -- Handle Selection
+                        local is_selected = (selected_browser_action and selected_browser_action.command_id == action.command_id)
+                        if reaper.ImGui_Selectable(ctx, item_label, is_selected, reaper.ImGui_SelectableFlags_AllowDoubleClick(), 0, 0) then
+                            selected_browser_action = action
+                            
+                            -- Support Double Click to Run
+                            if reaper.ImGui_IsMouseDoubleClicked(ctx, 0) then
+                                local execution = require("execution")
+                                local temp_slot = { type = "action", data = { command_id = action.command_id } }
+                                execution.trigger_slot(temp_slot)
+                            end
                         end
                         
                         -- 然后在 Selectable 之后设置为拖放源

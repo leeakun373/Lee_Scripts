@@ -16,14 +16,14 @@ local execution = require("execution")
 -- ============================================================================
 local GRID_COLS = 3
 local GRID_ROWS = 3
-local TOTAL_SLOTS = 9 
+-- [REMOVED] local TOTAL_SLOTS = 9 (删除这行常量)
 local GAP = 4           
 
 -- 计算总尺寸
 local WINDOW_PADDING = 10
 
 -- 动态获取布局尺寸（从配置中读取）
-local function get_layout_dims(config)
+local function get_layout_dims(config, slot_count)
     -- Fallback if config is nil (should not happen, but safe)
     if not config or not config.menu then return 80, 32, 0, 0, 4, 10 end
     
@@ -32,7 +32,10 @@ local function get_layout_dims(config)
     local gap = GAP
     local padding = WINDOW_PADDING
     local cols = GRID_COLS
-    local rows = GRID_ROWS
+    
+    -- [动态计算行数]
+    local count = math.max(9, slot_count or 9) -- 至少显示 3x3，如果更多则扩展
+    local rows = math.ceil(count / cols)
     
     local total_w = (w * cols) + (gap * (cols - 1)) + (padding * 2)
     local total_h = (h * rows) + (gap * (rows - 1)) + (padding * 2)
@@ -66,8 +69,11 @@ function M.draw_submenu(ctx, sector_data, center_x, center_y, anim_scale, config
     -- [REVERTED] 移除 Pop 动画。使用固定大小和位置。
     -- 我们仍然使用 anim_scale 仅用于透明度（Alpha），这是稳定的。
     
-    -- 获取动态尺寸（传递 config）
-    local slot_w, slot_h, win_w, win_h = get_layout_dims(config)
+    -- 获取插槽数量
+    local slot_count = sector_data.slots and #sector_data.slots or 0
+    
+    -- 传递 slot_count 给 get_layout_dims
+    local slot_w, slot_h, win_w, win_h = get_layout_dims(config, slot_count)
     
     -- 1. 计算智能位置（固定位置，传递 config）
     local x, y = M.calculate_submenu_position(ctx, sector_data, center_x, center_y, config)
@@ -92,7 +98,7 @@ function M.draw_submenu(ctx, sector_data, center_x, center_y, anim_scale, config
     reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_Border(), border_col)
     
     -- 获取动态尺寸（用于样式，传递 config）
-    local _, _, _, _, gap, padding = get_layout_dims(config)
+    local _, _, _, _, gap, padding = get_layout_dims(config, slot_count)
     
     -- 布局样式
     reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_WindowPadding(), padding, padding)
@@ -135,8 +141,8 @@ function M.draw_submenu(ctx, sector_data, center_x, center_y, anim_scale, config
         end
         
         -- 获取动态尺寸并传递给绘制函数（传递 config）
-        local slot_w, slot_h = get_layout_dims(config)
-        M.draw_grid_buttons(ctx, sector_data, slot_w, slot_h)
+        local slot_w, slot_h = get_layout_dims(config, slot_count)
+        M.draw_grid_buttons(ctx, sector_data, slot_w, slot_h, slot_count)
         
         -- 处理拖拽视觉反馈和放置检测
         M.handle_drag_and_drop(ctx)
@@ -155,8 +161,11 @@ end
 -- 绘制按钮网格
 -- ============================================================================
 
-function M.draw_grid_buttons(ctx, sector_data, slot_w, slot_h)
-    for i = 1, TOTAL_SLOTS do
+function M.draw_grid_buttons(ctx, sector_data, slot_w, slot_h, slot_count)
+    -- 至少渲染 9 个格子，或者更多
+    local render_count = math.max(9, slot_count)
+    
+    for i = 1, render_count do
         local slot = sector_data.slots and sector_data.slots[i] or nil
         
         if (i - 1) % GRID_COLS ~= 0 then
