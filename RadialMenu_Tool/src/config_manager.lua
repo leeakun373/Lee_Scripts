@@ -29,7 +29,7 @@ end
 -- 包含 6 个扇区，每个扇区 12 个空槽位
 function M.get_default()
     return {
-        version = "1.0.0",
+        version = "1.1.0",
         
         -- 菜单外观设置
         menu = {
@@ -115,44 +115,104 @@ end
 -- 配置加载
 -- ============================================================================
 
--- 从 config.json 加载配置
--- 如果文件不存在，创建并返回默认配置
--- 如果文件格式错误，显示错误并返回默认配置
-function M.load()
+-- 内部函数：加载完整的配置文件结构（包含 presets）
+local function load_full_config()
     local config_path = M.get_config_path()
     
     -- 检查文件是否存在
     local file = io.open(config_path, "r")
     if not file then
-        -- reaper.ShowConsoleMsg("配置文件不存在，创建默认配置...\n")
+        -- 文件不存在，创建新结构
         local default_config = M.get_default()
-        M.save(default_config)
-        return default_config
+        local full_config = {
+            active_config = default_config,
+            presets = {
+                Default = default_config
+            },
+            current_preset_name = "Default"
+        }
+        -- 保存新结构
+        local success, err = json.save_to_file(full_config, config_path, true)
+        return full_config
     end
     file:close()
     
     -- 加载 JSON 文件
-    local config, err = json.load_from_file(config_path)
+    local full_config, err = json.load_from_file(config_path)
     
-    if not config then
-        -- reaper.ShowConsoleMsg("配置文件加载失败: " .. (err or "未知错误") .. "\n")
-        -- reaper.ShowConsoleMsg("使用默认配置\n")
-        return M.get_default()
+    if not full_config then
+        -- 加载失败，返回默认结构
+        local default_config = M.get_default()
+        return {
+            active_config = default_config,
+            presets = {
+                Default = default_config
+            },
+            current_preset_name = "Default"
+        }
     end
     
-    -- 验证配置
-    local is_valid, error_msg = M.validate(config)
+    -- 检测旧版配置（没有 presets 字段）
+    if not full_config.presets then
+        -- 旧版配置，进行迁移
+        local old_config = full_config
+        local default_config = M.get_default()
+        
+        -- 合并旧配置与默认值
+        old_config = M.merge_with_defaults(old_config)
+        
+        -- 创建新结构
+        full_config = {
+            active_config = old_config,
+            presets = {
+                Default = old_config
+            },
+            current_preset_name = "Default"
+        }
+        
+        -- 保存迁移后的配置
+        json.save_to_file(full_config, config_path, true)
+    end
+    
+    -- 确保结构完整
+    if not full_config.active_config then
+        local default_config = M.get_default()
+        full_config.active_config = default_config
+    end
+    
+    if not full_config.presets then
+        full_config.presets = {}
+    end
+    
+    if not full_config.presets.Default then
+        local default_config = M.get_default()
+        full_config.presets.Default = default_config
+    end
+    
+    if not full_config.current_preset_name then
+        full_config.current_preset_name = "Default"
+    end
+    
+    -- 验证 active_config
+    local is_valid, error_msg = M.validate(full_config.active_config)
     if not is_valid then
-        -- reaper.ShowConsoleMsg("配置文件验证失败: " .. error_msg .. "\n")
-        -- reaper.ShowConsoleMsg("使用默认配置\n")
-        return M.get_default()
+        -- 验证失败，使用默认配置
+        local default_config = M.get_default()
+        full_config.active_config = default_config
+        full_config.presets.Default = default_config
+    else
+        -- 合并默认值确保完整性
+        full_config.active_config = M.merge_with_defaults(full_config.active_config)
     end
     
-    -- 合并默认值（确保所有字段都存在）
-    config = M.merge_with_defaults(config)
-    
-    -- reaper.ShowConsoleMsg("配置文件加载成功\n")
-    return config
+    return full_config
+end
+
+-- 从 config.json 加载配置
+-- 返回当前激活的配置（active_config）
+function M.load()
+    local full_config = load_full_config()
+    return full_config.active_config
 end
 
 -- ============================================================================
@@ -160,6 +220,7 @@ end
 -- ============================================================================
 
 -- 将配置保存到 config.json
+-- 同时更新 active_config 和当前预设
 function M.save(config)
     local config_path = M.get_config_path()
     
@@ -170,8 +231,20 @@ function M.save(config)
         return false
     end
     
+    -- 加载完整配置结构
+    local full_config = load_full_config()
+    
+    -- 更新 active_config
+    full_config.active_config = config
+    
+    -- 更新当前预设（如果存在）
+    local current_preset_name = full_config.current_preset_name or "Default"
+    if full_config.presets[current_preset_name] then
+        full_config.presets[current_preset_name] = config
+    end
+    
     -- 保存到文件（带缩进格式化）
-    local success, err = json.save_to_file(config, config_path, true)
+    local success, err = json.save_to_file(full_config, config_path, true)
     
     if not success then
         reaper.ShowMessageBox("配置保存失败: " .. (err or "未知错误"), "错误", 0)
@@ -251,8 +324,8 @@ function M.validate(config)
         
         -- 验证槽位
         for j, slot in ipairs(sector.slots) do
-            -- [FIX] Allow "empty" type
-            if not slot.type or (slot.type ~= "action" and slot.type ~= "fx" and slot.type ~= "script" and slot.type ~= "empty") then
+            -- [FIX] Allow "empty", "chain", "template" types
+            if not slot.type or (slot.type ~= "action" and slot.type ~= "fx" and slot.type ~= "chain" and slot.type ~= "template" and slot.type ~= "empty") then
                 return false, string.format("扇区 %d 槽位 %d 的 type 无效: %s", i, j, tostring(slot.type))
             end
             
@@ -359,6 +432,201 @@ function M.remove_slot_from_sector(config, sector_id, slot_index)
     
     table.remove(sector.slots, slot_index)
     return true
+end
+
+-- ============================================================================
+-- 预设管理函数
+-- ============================================================================
+
+-- 加载完整的预设列表
+function M.load_presets()
+    local full_config = load_full_config()
+    return full_config.presets or {}
+end
+
+-- 保存预设
+-- @param name string: 预设名称
+-- @param config_data table: 配置数据
+function M.save_preset(name, config_data)
+    if not name or name == "" then
+        return false, "预设名称不能为空"
+    end
+    
+    -- 验证配置
+    local is_valid, error_msg = M.validate(config_data)
+    if not is_valid then
+        return false, "配置验证失败: " .. error_msg
+    end
+    
+    local config_path = M.get_config_path()
+    local full_config = load_full_config()
+    
+    -- 确保 presets 表存在
+    if not full_config.presets then
+        full_config.presets = {}
+    end
+    
+    -- 保存预设（深拷贝）
+    full_config.presets[name] = M.deep_copy_config(config_data)
+    
+    -- 保存到文件
+    local success, err = json.save_to_file(full_config, config_path, true)
+    if not success then
+        return false, "保存失败: " .. (err or "未知错误")
+    end
+    
+    return true
+end
+
+-- 删除预设
+-- @param name string: 预设名称
+function M.delete_preset(name)
+    if not name or name == "" then
+        return false, "预设名称不能为空"
+    end
+    
+    -- 禁止删除 Default 预设
+    if name == "Default" then
+        return false, "不能删除默认预设"
+    end
+    
+    local config_path = M.get_config_path()
+    local full_config = load_full_config()
+    
+    -- 检查预设是否存在
+    if not full_config.presets or not full_config.presets[name] then
+        return false, "预设不存在"
+    end
+    
+    -- 删除预设
+    full_config.presets[name] = nil
+    
+    -- 如果删除的是当前预设，切换到 Default
+    if full_config.current_preset_name == name then
+        full_config.current_preset_name = "Default"
+        if full_config.presets.Default then
+            full_config.active_config = M.deep_copy_config(full_config.presets.Default)
+        end
+    end
+    
+    -- 保存到文件
+    local success, err = json.save_to_file(full_config, config_path, true)
+    if not success then
+        return false, "保存失败: " .. (err or "未知错误")
+    end
+    
+    return true
+end
+
+-- 应用预设
+-- @param name string: 预设名称
+function M.apply_preset(name)
+    if not name or name == "" then
+        return nil, "预设名称不能为空"
+    end
+    
+    local config_path = M.get_config_path()
+    local full_config = load_full_config()
+    
+    -- 检查预设是否存在
+    if not full_config.presets or not full_config.presets[name] then
+        return nil, "预设不存在"
+    end
+    
+    -- 应用预设到 active_config
+    local preset_config = full_config.presets[name]
+    full_config.active_config = M.deep_copy_config(preset_config)
+    full_config.current_preset_name = name
+    
+    -- 保存到文件
+    local success, err = json.save_to_file(full_config, config_path, true)
+    if not success then
+        return nil, "保存失败: " .. (err or "未知错误")
+    end
+    
+    -- 发出配置更新信号
+    reaper.SetExtState("RadialMenu", "ConfigUpdated", tostring(os.time()), false)
+    
+    return full_config.active_config
+end
+
+-- 获取预设列表（返回名称数组）
+function M.get_preset_list()
+    local presets = M.load_presets()
+    local preset_names = {}
+    
+    for name, _ in pairs(presets) do
+        table.insert(preset_names, name)
+    end
+    
+    -- 排序（Default 排在第一位）
+    table.sort(preset_names, function(a, b)
+        if a == "Default" then return true end
+        if b == "Default" then return false end
+        return a < b
+    end)
+    
+    return preset_names
+end
+
+-- 获取当前预设名称
+function M.get_current_preset_name()
+    local full_config = load_full_config()
+    return full_config.current_preset_name or "Default"
+end
+
+-- 设置当前预设名称
+function M.set_current_preset_name(name)
+    if not name or name == "" then
+        return false, "预设名称不能为空"
+    end
+    
+    local config_path = M.get_config_path()
+    local full_config = load_full_config()
+    
+    -- 检查预设是否存在
+    if not full_config.presets or not full_config.presets[name] then
+        return false, "预设不存在"
+    end
+    
+    full_config.current_preset_name = name
+    
+    -- 保存到文件
+    local success, err = json.save_to_file(full_config, config_path, true)
+    if not success then
+        return false, "保存失败: " .. (err or "未知错误")
+    end
+    
+    return true
+end
+
+-- 深拷贝配置（用于预设管理）
+function M.deep_copy_config(src)
+    if type(src) ~= "table" then
+        return src
+    end
+    
+    local dst = {}
+    for key, value in pairs(src) do
+        if type(value) == "table" then
+            dst[key] = M.deep_copy_config(value)
+        else
+            dst[key] = value
+        end
+    end
+    
+    -- 处理数组部分
+    if #src > 0 then
+        for i = 1, #src do
+            if type(src[i]) == "table" then
+                dst[i] = M.deep_copy_config(src[i])
+            else
+                dst[i] = src[i]
+            end
+        end
+    end
+    
+    return dst
 end
 
 return M

@@ -569,30 +569,30 @@ function M.draw()
     -- ============================================================
     -- 7. 绘制拖拽视觉反馈和处理放置（在主窗口上）
     -- ============================================================
+    -- [关键逻辑] 使用 Lua 状态 list_view.is_dragging() 作为唯一真理
     if list_view.is_dragging() then
-        local draw_list = reaper.ImGui_GetWindowDrawList(ctx)
         local dragging_slot = list_view.get_dragging_slot()
         
-        -- 绘制拖拽视觉反馈
+        -- 1. 绘制跟随鼠标的视觉反馈 (即便鼠标移出了 ImGui 窗口也能看到)
+        local draw_list = reaper.ImGui_GetWindowDrawList(ctx)
         if draw_list and dragging_slot then
             list_view.draw_drag_feedback(draw_list, ctx, dragging_slot)
         end
         
-        -- 检查鼠标是否释放（在主窗口中检测，因为鼠标可能移出子菜单窗口）
+        -- 2. 检测鼠标释放 (Drop Detection)
+        -- 在主窗口中检测，因为鼠标可能移出子菜单窗口
         if not reaper.ImGui_IsMouseDown(ctx, 0) then
-            -- 静默模式：不输出日志
+            -- 鼠标左键松开了，且之前处于拖拽状态 -> 触发放置
             
-            -- 鼠标已释放，执行放置操作
-            
-            -- [CRITICAL]: Use reaper.GetMousePosition() for Screen Coordinates
-            -- Do NOT use ImGui.GetMousePos() here because GetThingFromPoint needs global screen coords.
+            -- 获取全局屏幕坐标 (用于 reaper.GetThingFromPoint)
             local screen_x, screen_y = reaper.GetMousePosition()
             
-            if screen_x and screen_y then
+            if screen_x and screen_y and dragging_slot then
+                -- 调用执行模块处理放置 (判断是放到 Track, Item 还是 Empty Area)
                 execution.handle_drop(dragging_slot, screen_x, screen_y)
             end
             
-            -- 重置拖拽状态
+            -- 立即重置拖拽状态
             list_view.reset_drag()
         end
     end
@@ -612,6 +612,12 @@ function M.handle_sector_click(center_x, center_y, inner_radius, outer_radius, i
         return
     end
     
+    -- [关键修复] 如果鼠标悬停在子菜单上，不处理任何点击（让子菜单自己处理）
+    -- 这确保点击子菜单内的按钮不会触发扇区点击逻辑
+    if is_submenu_hovered then
+        return
+    end
+    
     -- 获取鼠标位置
     local mouse_x, mouse_y = reaper.ImGui_GetMousePos(ctx)
     local win_x, win_y = reaper.ImGui_GetWindowPos(ctx)
@@ -623,7 +629,6 @@ function M.handle_sector_click(center_x, center_y, inner_radius, outer_radius, i
     local distance = math_utils.distance(relative_x, relative_y, w/2, h/2)
     
     -- 只有在扇区环带内，且没有正在拖拽中心时，才检测点击
-    -- 另外：确保没有悬停在子菜单上 (ImGui 会自动处理 Window 遮挡，所以这里不用太担心)
     if distance > inner_radius and distance <= outer_radius then
         
         -- 只有点击左键时触发
@@ -637,13 +642,11 @@ function M.handle_sector_click(center_x, center_y, inner_radius, outer_radius, i
              end
         end
         
-        -- 如果鼠标在这个环带内，我们需要"吞掉"输入，防止穿透到 Reaper
-        -- 但是 ReaImGui 默认就会吞掉窗口内的输入，所以这步是自动的
-        
     elseif distance > outer_radius then
         -- [核心] 解决大框遮挡问题：
         -- 如果鼠标在轮盘外部，点击时我们希望穿透下去。
         -- [FIX] Only close if clicked AND NOT hovering the submenu AND NOT dragging
+        -- 注意：子菜单是独立窗口，ImGui 会自动处理子菜单内的点击，不会传播到这里
         if reaper.ImGui_IsMouseClicked(ctx, 0) then
             if show_submenu and not is_submenu_hovered and not is_dragging then
                 -- 点击了外部且没有悬停在子菜单上，关闭子菜单

@@ -43,7 +43,6 @@ end
 -- 列表视图状态
 local current_sector = nil
 local dragging_slot = nil  -- 当前正在拖拽的插槽
-local drag_start_pos = nil  -- 拖拽开始位置（用于判断是否真的在拖拽）
 
 -- 导出拖拽状态（供主运行时使用）
 function M.is_dragging()
@@ -110,24 +109,28 @@ function M.draw_submenu(ctx, sector_data, center_x, center_y, anim_scale, config
 
     if reaper.ImGui_Begin(ctx, "##Submenu_" .. sector_data.id, true, reaper.ImGui_WindowFlags_NoDecoration() | reaper.ImGui_WindowFlags_NoMove()) then
         -- [FIX] Check if this window is hovered (including items inside it)
-        -- Try to use ChildWindows flag if available (includes child windows in hover detection)
-        if reaper.ImGui_HoveredFlags_ChildWindows then
-            is_submenu_hovered = reaper.ImGui_IsWindowHovered(ctx, reaper.ImGui_HoveredFlags_ChildWindows())
-        else
-            -- Fallback: check without flags if the API doesn't support it
-            is_submenu_hovered = reaper.ImGui_IsWindowHovered(ctx)
+        -- 使用 IsWindowHovered 检测窗口是否被悬停
+        -- 注意：这个检测必须在 Begin 之后进行，才能正确检测到窗口状态
+        is_submenu_hovered = reaper.ImGui_IsWindowHovered(ctx)
+        
+        -- 额外检查：验证鼠标是否真的在窗口范围内（双重保险）
+        if is_submenu_hovered then
+            local mouse_x, mouse_y = reaper.ImGui_GetMousePos(ctx)
+            local win_x, win_y = reaper.ImGui_GetWindowPos(ctx)
+            local win_w, win_h = reaper.ImGui_GetWindowSize(ctx)
             
-            -- Additional check: verify mouse is within window bounds
-            if is_submenu_hovered then
-                local mouse_x, mouse_y = reaper.ImGui_GetMousePos(ctx)
-                local win_x, win_y = reaper.ImGui_GetWindowPos(ctx)
-                local win_w, win_h = reaper.ImGui_GetWindowSize(ctx)
-                
-                -- Double-check mouse is actually in window bounds
-                if not (mouse_x >= win_x and mouse_x <= win_x + win_w and
-                       mouse_y >= win_y and mouse_y <= win_y + win_h) then
-                    is_submenu_hovered = false
-                end
+            -- 双重检查鼠标是否真的在窗口边界内
+            if not (mouse_x >= win_x and mouse_x <= win_x + win_w and
+                   mouse_y >= win_y and mouse_y <= win_y + win_h) then
+                is_submenu_hovered = false
+            end
+        end
+        
+        -- 额外检查：如果窗口内有任何活动项（按钮被按下等），也认为窗口被悬停
+        -- 这确保在点击按钮时，窗口仍然被认为是"悬停"状态
+        if not is_submenu_hovered then
+            if reaper.ImGui_IsAnyItemActive(ctx) or reaper.ImGui_IsAnyItemHovered(ctx) then
+                is_submenu_hovered = true
             end
         end
         
@@ -214,27 +217,49 @@ function M.draw_single_button(ctx, slot, index, w, h)
     
     -- [FIX] Update Click Logic to use is_configured
     -- 先绘制按钮，这样 IsItemActive 和 IsMouseDragging 才能正确工作
-    if reaper.ImGui_Button(ctx, label .. "##Slot" .. index, w, h) then
-        if is_configured and not dragging_slot then
-            M.handle_item_click(slot)
-        end
+    local button_clicked = false
+    if is_configured then
+        button_clicked = reaper.ImGui_Button(ctx, label .. "##Slot" .. index, w, h)
+    else
+        -- 空插槽也绘制按钮（用于占位）
+        reaper.ImGui_Button(ctx, label .. "##Slot" .. index, w, h)
     end
     
     -- [FIX] Update Drag Logic to use is_configured
     -- 拖拽检测必须在按钮绘制之后，因为 IsItemActive 需要按钮状态
-    if is_configured and reaper.ImGui_IsItemActive(ctx) and reaper.ImGui_IsMouseDragging(ctx, 0) then
-        -- 检查是否真的在拖拽（移动距离超过阈值）
-        local mouse_delta_x, mouse_delta_y = reaper.ImGui_GetMouseDelta(ctx, 0)
-        local drag_distance = math.sqrt(mouse_delta_x * mouse_delta_x + mouse_delta_y * mouse_delta_y)
-        
-        if drag_distance > 5 then  -- 5 像素阈值，避免误触发
-            if not dragging_slot or dragging_slot ~= slot then
-                -- 静默模式：不输出日志
-                dragging_slot = slot
-                local mouse_x, mouse_y = reaper.ImGui_GetMousePos(ctx)
-                drag_start_pos = {x = mouse_x, y = mouse_y}
+    -- 关键：先检测拖拽，再处理点击，确保拖拽状态在点击检测时已经设置
+    if is_configured and reaper.ImGui_IsItemActive(ctx) then
+        -- 检查鼠标是否正在拖拽（使用 IsMouseDragging 或检查鼠标移动距离）
+        local is_dragging = reaper.ImGui_IsMouseDragging(ctx, 0)
+        if not is_dragging then
+            -- 如果 IsMouseDragging 返回 false，检查鼠标移动距离
+            local mouse_delta_x, mouse_delta_y = reaper.ImGui_GetMouseDelta(ctx, 0)
+            local drag_distance = math.sqrt(mouse_delta_x * mouse_delta_x + mouse_delta_y * mouse_delta_y)
+            if drag_distance > 3 then  -- 降低阈值，更早检测到拖拽
+                is_dragging = true
             end
         end
+        
+        if is_dragging then
+            -- 检查是否真的在拖拽（移动距离超过阈值）
+            local mouse_delta_x, mouse_delta_y = reaper.ImGui_GetMouseDelta(ctx, 0)
+            local drag_distance = math.sqrt(mouse_delta_x * mouse_delta_x + mouse_delta_y * mouse_delta_y)
+            
+            if drag_distance > 3 then  -- 降低阈值到 3 像素，更早检测到拖拽
+                if not dragging_slot or dragging_slot ~= slot then
+                    dragging_slot = slot
+                end
+            end
+        end
+    end
+    
+    -- [关键修改] 点击逻辑优化
+    -- 只有在【没有正在拖拽】的情况下才触发点击
+    -- ImGui_Button 返回 true 表示点击释放了，但这可能是在拖拽结束时触发
+    -- 所以必须严格检查 dragging_slot 是否为 nil
+    if button_clicked and is_configured and not dragging_slot then
+        -- 这是一个纯点击 (Action)
+        M.handle_item_click(slot)
     end
     
     reaper.ImGui_PopStyleVar(ctx, 2)
@@ -242,8 +267,7 @@ function M.draw_single_button(ctx, slot, index, w, h)
     
     -- [FIX] Update Tooltip Logic to use is_configured
     if is_configured and reaper.ImGui_IsItemHovered(ctx) and not dragging_slot then
-        local tooltip = slot.description
-        if not tooltip or tooltip == "" then tooltip = slot.name end
+        local tooltip = slot.name
         if tooltip and tooltip ~= "" then
             reaper.ImGui_BeginTooltip(ctx)
             reaper.ImGui_Text(ctx, tooltip)
@@ -327,7 +351,6 @@ end
 -- 重置拖拽状态（由主运行时调用）
 function M.reset_drag()
     dragging_slot = nil
-    drag_start_pos = nil
 end
 
 -- 绘制拖拽视觉反馈 (使用 Tooltip 防止被窗口裁切)

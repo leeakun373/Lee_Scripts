@@ -17,6 +17,13 @@ local math_utils = require("math_utils")
 local im_utils = require("im_utils")
 local utils_fx = require("utils_fx")
 
+-- 设置界面模块
+local tab_preview = require("settings.tab_preview")
+local tab_grid = require("settings.tab_grid")
+local tab_inspector = require("settings.tab_inspector")
+local tab_browser = require("settings.tab_browser")
+local tab_presets = require("settings.tab_presets")
+
 -- ============================================================================
 -- 设置界面状态
 -- ============================================================================
@@ -25,25 +32,16 @@ local ctx = nil
 local config = nil
 local original_config = nil  -- 原始配置（用于丢弃更改）
 local is_open = false
-local is_modified = false
-local selected_sector_index = nil  -- 当前选中的扇区索引（1-based）
-local preview_config = nil  -- 缓存的预览配置（避免每次绘制都深拷贝）
-
--- 新增状态变量
-local actions_cache = nil  -- Action 列表缓存
-local actions_filtered = {}  -- 过滤后的 Action 列表
-local action_search_text = ""  -- Action 搜索文本
-local browser_tab = 0  -- 浏览器标签页 (0=Actions, 1=FX)
-local fx_list = {}  -- FX 列表（简单实现）
-local fx_search_text = ""  -- FX 搜索文本
-local current_fx_filter = "All"  -- 当前 FX 过滤器 (All, VST, VST3, JS, AU, CLAP, LV2, Chain, Template)
-local fx_list_clipper = nil  -- FX ListClipper 缓存
-local selected_slot_index = nil  -- 当前选中的插槽索引（用于属性栏编辑）
-local action_list_clipper = nil  -- ListClipper 缓存（使用 ValidatePtr 验证有效性）
-local save_feedback_time = 0  -- 保存反馈时间戳（用于显示保存成功消息）
-local tooltip_hover_start_time = 0  -- Tooltip 悬停开始时间
-local tooltip_current_slot_id = nil  -- 当前悬停的插槽 ID
 local removed_sector_stash = {}  -- 缓存被删除的扇区数据（用于恢复）
+
+-- 中央状态对象（传递给各个模块）
+local state = {
+    is_modified = false,
+    selected_sector_index = nil,  -- 当前选中的扇区索引（1-based）
+    selected_slot_index = nil,  -- 当前选中的插槽索引（用于属性栏编辑）
+    current_preset_name = "Default",  -- 当前预设名称
+    save_feedback_time = 0,  -- 保存反馈时间戳（用于显示保存成功消息）
+}
 
 -- ============================================================================
 -- Phase 4 - 初始化
@@ -92,6 +90,9 @@ function M.init()
         return false
     end
     
+    -- 获取当前预设名称并更新状态
+    current_preset_name = config_manager.get_current_preset_name()
+    
     -- 深拷贝配置（用于丢弃更改）
     original_config = M.deep_copy_config(config)
     
@@ -100,13 +101,12 @@ function M.init()
     
     -- 初始化状态变量
     is_open = true
-    is_modified = false
-    selected_sector_index = nil
+    state.is_modified = false
+    state.selected_sector_index = nil
+    state.selected_slot_index = nil
+    state.current_preset_name = config_manager.get_current_preset_name() or "Default"
+    state.save_feedback_time = 0
     removed_sector_stash = {}  -- 清空扇区缓存（确保每次打开编辑器时都是干净的状态）
-    
-    -- 初始化 Action 缓存和过滤列表
-    M.load_actions()
-    actions_filtered = M.filter_actions("")
     
     -- 标记设置窗口已打开
     reaper.SetExtState("RadialMenu", "SettingsOpen", "1", false)
@@ -204,7 +204,9 @@ function M.draw()
     local color_count, style_var_count = M.apply_theme()
     
     -- 设置窗口大小和位置
-    reaper.ImGui_SetNextWindowSize(ctx, 1200, 700, reaper.ImGui_Cond_FirstUseEver())
+    -- 设定默认窗口大小为 800x600 (仅在从未保存过布局时生效)
+    -- 注意：使用 ImGui_Cond_FirstUseEver 确保只在首次运行时生效，不会覆盖用户手动调整的窗口大小
+    reaper.ImGui_SetNextWindowSize(ctx, 800, 600, reaper.ImGui_Cond_FirstUseEver())
     
     -- 开始窗口
     local visible, open = reaper.ImGui_Begin(ctx, "RadialMenu 设置编辑器", true, reaper.ImGui_WindowFlags_None())
@@ -238,11 +240,52 @@ function M.draw()
         
         -- 左侧列：预览面板
         reaper.ImGui_TableNextColumn(ctx)
-        M.draw_preview_panel()
+        local preview_callbacks = {
+            adjust_sector_count = M.adjust_sector_count,
+            on_sector_selected = function(index)
+                if state.selected_sector_index ~= index then
+                    state.selected_slot_index = nil
+                end
+            end,
+            on_clear_sector = function(index)
+                -- 清除扇区时已处理
+            end
+        }
+        tab_preview.draw(ctx, config, state, preview_callbacks)
         
-        -- 右侧列：编辑器面板（分为上下两部分）
+        -- 右侧列：编辑器面板
         reaper.ImGui_TableNextColumn(ctx)
-        M.draw_editor_panel_split()
+        if state.selected_sector_index and state.selected_sector_index >= 1 and state.selected_sector_index <= #config.sectors then
+            local sector = config.sectors[state.selected_sector_index]
+            
+            -- 第一部分：子菜单网格编辑器
+            if reaper.ImGui_BeginChild(ctx, "##EditorGrid", 0, 160, 1, reaper.ImGui_WindowFlags_None()) then
+                tab_grid.draw(ctx, sector, state)
+                reaper.ImGui_EndChild(ctx)
+            end
+            
+            reaper.ImGui_Spacing(ctx)
+            reaper.ImGui_Separator(ctx)
+            reaper.ImGui_Spacing(ctx)
+            
+            -- 第二部分：属性栏（Inspector）
+            if state.selected_slot_index and state.selected_slot_index >= 1 then
+                local slot = sector.slots[state.selected_slot_index]
+                local is_real_slot = slot and slot.type ~= "empty"
+                if is_real_slot then
+                    tab_inspector.draw(ctx, slot, state.selected_slot_index, sector, state)
+                end
+            end
+            
+            reaper.ImGui_Spacing(ctx)
+            reaper.ImGui_Separator(ctx)
+            reaper.ImGui_Spacing(ctx)
+            
+            -- 第三部分：资源浏览器
+            tab_browser.draw(ctx, sector, state)
+        else
+            reaper.ImGui_TextDisabled(ctx, "请从左侧预览中选择一个扇区进行编辑")
+        end
         
         reaper.ImGui_EndTable(ctx)
     end
@@ -1301,6 +1344,15 @@ function M.draw_slot_editor(slot, index, sector)
     reaper.ImGui_Text(ctx, header_text)
     reaper.ImGui_SameLine(ctx)
     
+    -- 清理插槽按钮
+    if reaper.ImGui_Button(ctx, "清理插槽##Slot" .. index, 0, 0) then
+        -- 将插槽重置为空插槽，保留插槽位置
+        sector.slots[index] = { type = "empty" }
+        is_modified = true
+    end
+    
+    reaper.ImGui_SameLine(ctx)
+    
     -- 删除按钮
     if reaper.ImGui_Button(ctx, "删除##Slot" .. index, 0, 0) then
         sector.slots[index] = nil
@@ -1324,7 +1376,7 @@ function M.draw_slot_editor(slot, index, sector)
     -- 类型下拉框
     reaper.ImGui_Text(ctx, "  类型:")
     reaper.ImGui_SameLine(ctx)
-    local type_options = {"action", "fx", "script"}
+    local type_options = {"action", "fx", "chain", "template"}
     local current_type = slot.type or "action"
     local current_type_display = current_type
     
@@ -1339,8 +1391,10 @@ function M.draw_slot_editor(slot, index, sector)
                     slot.data = {command_id = 0}
                 elseif slot.type == "fx" then
                     slot.data = {fx_name = ""}
-                elseif slot.type == "script" then
-                    slot.data = {script_path = ""}
+                elseif slot.type == "chain" then
+                    slot.data = {path = ""}
+                elseif slot.type == "template" then
+                    slot.data = {path = ""}
                 end
                 is_modified = true
             end
@@ -1376,27 +1430,27 @@ function M.draw_slot_editor(slot, index, sector)
             is_modified = true
         end
         
-    elseif slot.type == "script" then
-        reaper.ImGui_Text(ctx, "  脚本路径:")
+    elseif slot.type == "chain" then
+        reaper.ImGui_Text(ctx, "  Chain 路径:")
         reaper.ImGui_SameLine(ctx)
-        local script_path = slot.data and slot.data.script_path or ""
-        local script_path_changed, new_script_path = reaper.ImGui_InputText(ctx, "##SlotValue" .. index, script_path, 512)
-        if script_path_changed then
+        local chain_path = slot.data and slot.data.path or ""
+        local chain_path_changed, new_chain_path = reaper.ImGui_InputText(ctx, "##SlotValue" .. index, chain_path, 512)
+        if chain_path_changed then
             if not slot.data then slot.data = {} end
-            slot.data.script_path = new_script_path
+            slot.data.path = new_chain_path
             is_modified = true
         end
-    end
-    
-    -- 描述输入
-    reaper.ImGui_Spacing(ctx)
-    reaper.ImGui_Text(ctx, "  描述:")
-    reaper.ImGui_SameLine(ctx)
-    local desc_buf = slot.description or ""
-    local desc_changed, new_desc = reaper.ImGui_InputText(ctx, "##SlotDesc" .. index, desc_buf, 256)
-    if desc_changed then
-        slot.description = new_desc
-        is_modified = true
+        
+    elseif slot.type == "template" then
+        reaper.ImGui_Text(ctx, "  Template 路径:")
+        reaper.ImGui_SameLine(ctx)
+        local template_path = slot.data and slot.data.path or ""
+        local template_path_changed, new_template_path = reaper.ImGui_InputText(ctx, "##SlotValue" .. index, template_path, 512)
+        if template_path_changed then
+            if not slot.data then slot.data = {} end
+            slot.data.path = new_template_path
+            is_modified = true
+        end
     end
 end
 
@@ -1413,7 +1467,7 @@ function M.draw_action_bar()
     reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_ButtonActive(), im_utils.color_to_u32(30, 136, 229, 255))
     if reaper.ImGui_Button(ctx, "保存", 0, 0) then
         if M.save_config() then
-            save_feedback_time = os.time()
+            state.save_feedback_time = os.time()
             -- [REMOVED] MessageBox - replaced with green text feedback
         end
     end
@@ -1438,27 +1492,14 @@ function M.draw_action_bar()
     end
     reaper.ImGui_PopStyleColor(ctx, 3)
     
-    -- 状态文本（绝对定位，不影响按钮布局）
-    local current_time = os.time()
-    local status_text = ""
-    local status_color = 0
-    
-    if current_time - save_feedback_time < 2 then
-        status_text = "✔ 配置已保存"
-        status_color = 0x4CAF50FF  -- Green
-    elseif is_modified then
-        status_text = "* 有未保存的更改"
-        status_color = 0xFFC800FF  -- Yellow
-    end
-    
-    if status_text ~= "" then
-        local text_w, text_h = reaper.ImGui_CalcTextSize(ctx, status_text)
-        local win_w, win_h = reaper.ImGui_GetWindowSize(ctx)
-        -- Align to right with 20px padding
-        reaper.ImGui_SameLine(ctx)  -- Keep on same line technically to share height
-        reaper.ImGui_SetCursorPosX(ctx, win_w - text_w - 20)
-        reaper.ImGui_TextColored(ctx, status_color, status_text)
-    end
+    -- 预设管理区域（使用模块）
+    local preset_callbacks = {
+        switch_preset = M.switch_preset,
+        save_current_preset = M.save_current_preset,
+        delete_current_preset = M.delete_current_preset,
+        save_config = M.save_config
+    }
+    tab_presets.draw(ctx, config, state, preset_callbacks)
 end
 
 -- ============================================================================
@@ -1486,12 +1527,12 @@ function M.save_config()
         end
     end
     
-    -- 保存配置（config_manager.save() 内部会发出更新信号）
+    -- 保存配置（config_manager.save() 内部会发出更新信号并更新当前预设）
     local success = config_manager.save(config)
     if success then
-        is_modified = false
+        state.is_modified = false
         original_config = M.deep_copy_config(config)
-        save_feedback_time = os.time() -- Trigger green feedback
+        state.save_feedback_time = os.time() -- Trigger green feedback
         return true
     else
         -- Keep error message for actual failures
@@ -1502,7 +1543,7 @@ end
 
 -- 丢弃更改，重新加载配置
 function M.discard_changes()
-    if is_modified then
+    if state.is_modified then
         local result = reaper.ShowMessageBox(
             "确定要丢弃所有未保存的更改吗？",
             "确认",
@@ -1510,8 +1551,8 @@ function M.discard_changes()
         )
         if result == 6 then  -- 6 = Yes
             config = M.deep_copy_config(original_config)
-            is_modified = false
-            selected_sector_index = nil
+            state.is_modified = false
+            state.selected_sector_index = nil
             -- reaper.ShowConsoleMsg("已丢弃更改\n")
         end
     end
@@ -1527,11 +1568,194 @@ function M.reset_to_default()
     if result == 6 then  -- 6 = Yes
         config = config_manager.get_default()
         original_config = M.deep_copy_config(config)
-        is_modified = true
-        selected_sector_index = nil
-        selected_slot_index = nil
+        state.is_modified = true
+        state.selected_sector_index = nil
+        state.selected_slot_index = nil
         styles.init_from_config(config)
         -- reaper.ShowConsoleMsg("已重置为默认配置\n")
+    end
+end
+
+-- ============================================================================
+-- Phase 4 - 预设管理
+-- ============================================================================
+
+-- 切换预设
+function M.switch_preset(preset_name)
+    if not preset_name or preset_name == "" then
+        return
+    end
+    
+    -- 如果有未保存的更改，提示用户（可选）
+    -- 这里我们直接切换，不提示（保持简单）
+    
+    -- 应用预设
+    local new_config, err = config_manager.apply_preset(preset_name)
+    if not new_config then
+        reaper.ShowMessageBox("切换预设失败: " .. (err or "未知错误"), "错误", 0)
+        return
+    end
+    
+    -- 更新当前配置
+    config = new_config
+    state.current_preset_name = preset_name
+    
+    -- 更新原始配置（用于丢弃更改）
+    original_config = M.deep_copy_config(config)
+    
+    -- 重置修改状态
+    state.is_modified = false
+    
+    -- 清除选中状态
+    state.selected_sector_index = nil
+    state.selected_slot_index = nil
+    
+    -- 更新样式
+    styles.init_from_config(config)
+end
+
+-- 保存当前预设
+function M.save_current_preset()
+    if not state.current_preset_name or state.current_preset_name == "" then
+        return
+    end
+    
+    -- 先保存当前配置（确保 active_config 更新）
+    if not M.save_config() then
+        return
+    end
+    
+    -- 保存预设（config_manager.save() 已经更新了预设，这里只是确认）
+    local success, err = config_manager.save_preset(state.current_preset_name, config)
+    if not success then
+        reaper.ShowMessageBox("保存预设失败: " .. (err or "未知错误"), "错误", 0)
+        return
+    end
+    
+    -- 重置修改状态
+    state.is_modified = false
+    original_config = M.deep_copy_config(config)
+end
+
+-- 删除当前预设
+function M.delete_current_preset()
+    if not state.current_preset_name or state.current_preset_name == "" then
+        return
+    end
+    
+    -- 禁止删除 Default
+    if state.current_preset_name == "Default" then
+        reaper.ShowMessageBox("不能删除默认预设", "错误", 0)
+        return
+    end
+    
+    -- 确认对话框
+    local result = reaper.ShowMessageBox(
+        "确定要删除预设 \"" .. state.current_preset_name .. "\" 吗？",
+        "确认删除",
+        4  -- 4 = Yes/No
+    )
+    
+    if result ~= 6 then  -- 6 = Yes
+        return
+    end
+    
+    -- 删除预设
+    local success, err = config_manager.delete_preset(state.current_preset_name)
+    if not success then
+        reaper.ShowMessageBox("删除预设失败: " .. (err or "未知错误"), "错误", 0)
+        return
+    end
+    
+    -- 切换到 Default 预设
+    M.switch_preset("Default")
+end
+
+-- 绘制新建预设弹窗
+function M.draw_new_preset_modal()
+    -- 设置弹窗默认大小为 320x160，足以容纳输入框和按钮
+    reaper.ImGui_SetNextWindowSize(ctx, 320, 160, reaper.ImGui_Cond_Appearing())
+    
+    -- 显示弹窗
+    if reaper.ImGui_BeginPopupModal(ctx, "新建预设", nil, reaper.ImGui_WindowFlags_None()) then
+        reaper.ImGui_Text(ctx, "请输入预设名称:")
+        reaper.ImGui_Spacing(ctx)
+        
+        -- 输入框
+        reaper.ImGui_SetNextItemWidth(ctx, -1)
+        local input_changed, new_text = reaper.ImGui_InputText(ctx, "##NewPresetName", new_preset_name_buf, 256)
+        if input_changed then
+            new_preset_name_buf = new_text
+        end
+        
+        reaper.ImGui_Spacing(ctx)
+        reaper.ImGui_Spacing(ctx)  -- 增加额外的间距，确保按钮不贴边
+        
+        -- 按钮区域（居中，底部留有 padding）
+        local button_width = 80
+        local avail_w = reaper.ImGui_GetContentRegionAvail(ctx)
+        local button_x = (avail_w - button_width * 2 - 8) / 2
+        
+        reaper.ImGui_SetCursorPosX(ctx, button_x)
+        
+        -- 确认按钮
+        if reaper.ImGui_Button(ctx, "确认", button_width, 0) then
+            local preset_name = new_preset_name_buf:match("^%s*(.-)%s*$")  -- 去除首尾空格
+            
+            if preset_name == "" then
+                reaper.ShowMessageBox("预设名称不能为空", "错误", 0)
+            else
+                -- 检查名称是否已存在
+                local preset_list = config_manager.get_preset_list()
+                local name_exists = false
+                for _, existing_name in ipairs(preset_list) do
+                    if existing_name == preset_name then
+                        name_exists = true
+                        break
+                    end
+                end
+                
+                if name_exists then
+                    reaper.ShowMessageBox("预设名称已存在，请使用其他名称", "错误", 0)
+                else
+                    -- 保存当前配置为新预设
+                    local success, err = config_manager.save_preset(preset_name, config)
+                    if success then
+                        -- 切换到新预设
+                        M.switch_preset(preset_name)
+                        -- 关闭弹窗
+                        show_new_preset_modal = false
+                        new_preset_name_buf = ""
+                        reaper.ImGui_CloseCurrentPopup(ctx)
+                    else
+                        reaper.ShowMessageBox("保存预设失败: " .. (err or "未知错误"), "错误", 0)
+                    end
+                end
+            end
+        end
+        
+        reaper.ImGui_SameLine(ctx, 0, 8)
+        
+        -- 取消按钮
+        if reaper.ImGui_Button(ctx, "取消", button_width, 0) then
+            show_new_preset_modal = false
+            new_preset_name_buf = ""
+            reaper.ImGui_CloseCurrentPopup(ctx)
+        end
+        
+        -- 如果按 ESC 键，关闭弹窗
+        if reaper.ImGui_IsKeyPressed(ctx, reaper.ImGui_Key_Escape()) then
+            show_new_preset_modal = false
+            new_preset_name_buf = ""
+            reaper.ImGui_CloseCurrentPopup(ctx)
+        end
+        
+        reaper.ImGui_EndPopup(ctx)
+    end
+    
+    -- 如果 show_new_preset_modal 为 true，打开弹窗
+    if show_new_preset_modal then
+        reaper.ImGui_OpenPopup(ctx, "新建预设")
     end
 end
 
@@ -1549,9 +1773,9 @@ function M.adjust_sector_count(new_count)
             table.remove(config.sectors, i)
         end
         -- 如果当前选中的扇区被删除了，取消选择
-        if selected_sector_index and selected_sector_index > new_count then
-            selected_sector_index = nil
-            selected_slot_index = nil
+        if state.selected_sector_index and state.selected_sector_index > new_count then
+            state.selected_sector_index = nil
+            state.selected_slot_index = nil
         end
         
     elseif new_count > current_count then
@@ -1587,7 +1811,7 @@ end
 
 -- 清理资源
 function M.cleanup()
-    if is_modified then
+    if state.is_modified then
         local result = reaper.ShowMessageBox(
             "有未保存的更改，确定要关闭吗？",
             "确认",
@@ -1613,13 +1837,13 @@ function M.cleanup()
     config = nil
     original_config = nil
     is_open = false
-    is_modified = false
-    selected_sector_index = nil
-    selected_slot_index = nil  -- 清理选中的插槽索引
-    action_list_clipper = nil  -- 清理 ListClipper 缓存
-    fx_list_clipper = nil  -- 清理 FX ListClipper 缓存
-    tooltip_hover_start_time = 0  -- 重置 Tooltip 状态
-    tooltip_current_slot_id = nil  -- 重置 Tooltip 状态
+    state = {
+        is_modified = false,
+        selected_sector_index = nil,
+        selected_slot_index = nil,
+        current_preset_name = "Default",
+        save_feedback_time = 0,
+    }
     
     -- reaper.ShowConsoleMsg("设置编辑器已关闭\n")
 end
