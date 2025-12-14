@@ -29,7 +29,7 @@ end
 -- 包含 6 个扇区，每个扇区 12 个空槽位
 function M.get_default()
     return {
-        version = "1.1.0",
+        version = "1.1.1",
         
         -- 菜单外观设置
         menu = {

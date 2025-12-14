@@ -22,32 +22,153 @@ RadialMenu Tool 是一个模块化的轮盘菜单系统，旨在为 REAPER 提�
 
 ```
 RadialMenu_Tool/
-├── Lee_RadialMenu.lua          # 主运行入口
-├── Lee_RadialMenu_Setup.lua    # 设置编辑器入口
+├── Lee_RadialMenu.lua          # 主运行入口（轮盘菜单启动脚本）
+├── Lee_RadialMenu_Setup.lua    # 设置编辑器入口（配置界面启动脚本）
+├── Lee_RadialMenu_reset_state.lua  # 状态重置工具
 ├── config.json                  # 用户配置文件（自动生成）
-├── .gitignore                  # Git 忽略文件
-├── README.md                   # 本文件
-├── src/                        # 源代码
-│   ├── config_manager.lua     # 配置文件管理
-│   ├── main_runtime.lua        # 主运行时循环
-│   ├── main_settings.lua       # 设置编辑器
-│   ├── gui/                    # GUI 模块
-│   │   ├── wheel.lua          # 轮盘绘制
-│   │   ├── list_view.lua      # 子菜单列表
-│   │   └── styles.lua          # 样式定义
-│   └── logic/                  # 业务逻辑
-│       ├── actions.lua        # Reaper Actions 执行
-│       ├── fx_engine.lua      # FX 智能挂载引擎
-│       └── search.lua         # 模糊搜索算法
-├── utils/                      # 工具函数
-│   ├── math_utils.lua         # 几何数学计算
-│   ├── im_utils.lua           # ImGui 辅助函数
-│   └── json.lua               # JSON 编码/解码
-└── doc/                        # 文档
-    ├── README.md              # 详细文档
-    ├── TODO.md               # 开发路线图
-    └── IMPLEMENTATION_NOTES.md # 实现说明
+├── config.example.json          # 配置文件模板
+├── src/                        # 源代码目录
+│   ├── config_manager.lua     # 配置管理器：读取/保存/验证 JSON 配置
+│   ├── main_runtime.lua        # 主运行时循环：轮盘菜单的核心运行逻辑
+│   ├── main_settings.lua       # 设置编辑器主文件：整合所有设置界面模块
+│   │
+│   ├── gui/                    # GUI 渲染模块
+│   │   ├── wheel.lua          # 轮盘绘制：绘制圆形扇区、处理扇区交互
+│   │   ├── list_view.lua      # 子菜单列表：绘制子菜单网格、处理拖拽和点击
+│   │   └── styles.lua          # 样式定义：ImGui 主题和颜色配置
+│   │
+│   ├── logic/                  # 业务逻辑模块
+│   │   ├── actions.lua        # Actions 执行：执行 REAPER Actions
+│   │   ├── execution.lua      # 执行引擎：统一处理所有插槽类型的执行逻辑
+│   │   ├── fx_engine.lua      # FX 智能挂载引擎：自动判断 Track/Item 上下文
+│   │   └── search.lua         # 模糊搜索算法：Actions 和 FX 的搜索功能
+│   │
+│   └── settings/               # 设置界面模块（v1.1.0 重构）
+│       ├── tab_preview.lua    # 预览面板：左侧轮盘预览和全局设置
+│       ├── tab_grid.lua       # 网格编辑器：中间插槽网格编辑区域
+│       ├── tab_inspector.lua  # 属性编辑栏：右侧选中插槽的属性编辑
+│       ├── tab_browser.lua    # 资源浏览器：Actions/FX/Chains/Templates 浏览
+│       └── tab_presets.lua    # 预设管理：配置预设的保存和加载
+│
+├── utils/                      # 工具函数库
+│   ├── math_utils.lua         # 几何数学计算：角度、坐标转换、缓动函数
+│   ├── im_utils.lua           # ImGui 辅助函数：常用 UI 组件封装
+│   ├── json.lua               # JSON 编码/解码：配置文件读写
+│   └── utils_fx.lua           # FX 工具：扫描 FX/Chains/Templates，缓存管理
+│
+└── doc/                        # 文档目录
+    ├── README.md              # 本文件（项目说明）
+    ├── USER_MANUAL.md         # 用户手册（详细使用指南）
+    ├── CHANGELOG.md           # 更新日志（版本历史）
+    ├── TODO.md                # 开发路线图（计划功能）
+    ├── IMPLEMENTATION_NOTES.md # 实现说明（技术细节）
+    └── GITHUB_SETUP.md        # GitHub 设置指南
 ```
+
+### 📦 模块功能说明
+
+#### 🚀 入口文件
+- **Lee_RadialMenu.lua**: 轮盘菜单的主入口，初始化配置、启动运行时循环
+- **Lee_RadialMenu_Setup.lua**: 设置编辑器的入口，启动配置界面
+
+#### 🎨 GUI 模块 (`src/gui/`)
+- **wheel.lua**: 
+  - 绘制圆形轮盘界面（扇区、中心圆）
+  - 处理扇区的悬停、点击交互
+  - 计算扇区角度和鼠标位置检测
+  - 扇区扩展动画效果
+  
+- **list_view.lua**: 
+  - 绘制子菜单网格（插槽按钮列表）
+  - 处理插槽的拖拽和点击事件
+  - 管理拖拽状态和反馈显示
+  - 子菜单窗口的显示和隐藏逻辑
+  
+- **styles.lua**: 
+  - 定义 ImGui 主题样式（颜色、字体、间距等）
+  - 提供统一的 UI 风格配置
+
+#### ⚙️ 业务逻辑模块 (`src/logic/`)
+- **actions.lua**: 
+  - 执行 REAPER Actions（通过 Command ID）
+  - 获取 Action 名称和描述
+  
+- **execution.lua**: 
+  - **核心执行引擎**：统一处理所有插槽类型的执行
+  - 根据插槽类型（action/fx/chain/template）调用相应的执行函数
+  - 处理执行结果和错误
+  
+- **fx_engine.lua**: 
+  - **智能上下文检测**：自动判断 FX 应该挂载到 Track 还是 Item
+  - 使用 `GetItemFromPoint` 检测鼠标位置的上下文
+  - 处理 FX 窗口的显示逻辑
+  
+- **search.lua**: 
+  - 模糊搜索算法：快速查找 Actions 和 FX
+  - 支持部分匹配和权重排序
+
+#### 🛠️ 设置界面模块 (`src/settings/`) - v1.1.0 新增
+- **tab_preview.lua**: 
+  - 左侧预览面板：实时显示轮盘配置效果
+  - 全局设置：轮盘大小、动画速度等
+  
+- **tab_grid.lua**: 
+  - 中间网格编辑器：显示和编辑扇区的所有插槽
+  - 支持拖拽重新排列插槽
+  - 插槽的添加、删除、清理操作
+  
+- **tab_inspector.lua**: 
+  - 右侧属性编辑栏：编辑选中插槽的详细属性
+  - 插槽类型选择（action/fx/chain/template）
+  - 插槽标签编辑
+  - 清理插槽和删除插槽功能
+  
+- **tab_browser.lua**: 
+  - 资源浏览器：浏览和搜索 Actions、FX、Chains、Templates
+  - 分类过滤（VST、VST3、JS、AU、CLAP、LV2 等）
+  - 支持拖拽到插槽
+  
+- **tab_presets.lua**: 
+  - 预设管理：保存和加载配置预设
+  - 预设的创建、删除、重命名
+
+#### 🔧 工具函数库 (`utils/`)
+- **math_utils.lua**: 
+  - 几何计算：角度转弧度、坐标转换、距离计算
+  - 缓动函数：easeInOut、easeOut 等动画曲线
+  - 颜色处理：RGB/HSV 转换、亮度调整
+  
+- **im_utils.lua**: 
+  - ImGui 常用组件封装：按钮、输入框、下拉框等
+  - UI 辅助函数：布局、对齐、间距等
+  
+- **json.lua**: 
+  - JSON 编码/解码：配置文件的读写
+  - 基于 dkjson 库实现
+  
+- **utils_fx.lua**: 
+  - FX 扫描：扫描系统中所有已安装的 FX
+  - Chains 扫描：扫描 FX Chains 文件
+  - Templates 扫描：扫描轨道模板文件
+  - 缓存管理：提高扫描性能
+
+#### 📋 核心文件
+- **config_manager.lua**: 
+  - 配置文件的读取、保存、验证
+  - 默认配置生成
+  - 配置版本迁移和兼容性处理
+  
+- **main_runtime.lua**: 
+  - 主运行时循环：轮盘菜单的核心运行逻辑
+  - 处理全局输入事件（鼠标、键盘）
+  - 协调 GUI 模块的渲染和交互
+  - 管理菜单的显示/隐藏、Pin 状态
+  
+- **main_settings.lua**: 
+  - 设置编辑器主文件：整合所有设置界面模块
+  - 管理设置界面的标签页切换
+  - 处理配置的保存和加载
+  - 中央状态管理（is_modified、selected_sector_index 等）
 
 ---
 

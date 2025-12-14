@@ -45,6 +45,10 @@ local last_active_sector_id = nil
 -- 扇区扩展动画状态（每个扇区ID对应一个0.0-1.0的进度值）
 local sector_anim_states = {}
 
+-- [Context Tracking] 记录最后一次有效的 Context
+-- 用于解决 ImGui 抢走焦点导致 GetCursorContext 返回不准确的问题
+local last_valid_context = -1
+
 -- ============================================================================
 -- Phase 2 - 初始化
 -- ============================================================================
@@ -198,6 +202,19 @@ function M.loop()
             show_submenu = false
             clicked_sector = nil
         end
+    end
+    
+    -- [Context Tracking] 持续更新 Context
+    -- 只有当 Context 明确为 Tracks (0) 或 Items (1) 或 Envelopes (2) 时才更新
+    -- 忽略 -1 (无效/无焦点) 或其他值
+    local current_context = reaper.GetCursorContext()
+    if current_context >= 0 and current_context <= 2 then
+        last_valid_context = current_context
+    end
+    
+    -- 将 last_valid_context 传递给 execution 模块 (如果模块支持)
+    if execution.set_last_valid_context then
+        execution.set_last_valid_context(last_valid_context)
     end
     
     -- ============================================================
