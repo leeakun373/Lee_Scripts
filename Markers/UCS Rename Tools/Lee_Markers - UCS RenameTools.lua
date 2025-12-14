@@ -1,12 +1,3 @@
--- @description ImGui Marker/Region Translator Pro (v10.2 Enhanced UX) - Modular Version
--- @version 10.2
--- @author HongKun Li
--- @about
---   Modular Architecture: 
---     - Config: Constants and Theme
---     - Modules: DataLoader, UCSMatcher, NameProcessor, ProjectActions, GUI
---     - Utils: Helper functions
-
 local r = reaper
 
 -- Check if ReaImGui is available

@@ -54,25 +54,6 @@
       </version>
     </reapack>
   </category>
-  <category name="Markers/UCS Rename Tools">
-    <reapack name="Lee_Markers - UCS RenameTools.lua" type="script" desc="ImGui Marker/Region Translator Pro (v10.2 Enhanced UX) - Modular Version">
-      <metadata>
-        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
-{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
-\widowctrl\hyphauto
-
-{\pard \ql \f0 \sa180 \li0 \fi0 Modular Architecture:\par}
-{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Config: Constants and Theme\par}
-{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Modules: DataLoader, UCSMatcher, NameProcessor, ProjectActions, GUI\par}
-{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Utils: Helper functions\sa180\par}
-}
-]]></description>
-      </metadata>
-      <version name="10.2" author="HongKun Li" time="2025-12-13T10:59:55Z">
-        <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/3dc6f14153b62bc3d744be80ea52302893653da8/Markers/UCS%20Rename%20Tools/Lee_Markers%20-%20UCS%20RenameTools.lua</source>
-      </version>
-    </reapack>
-  </category>
   <category name="RadialMenu_Tool">
     <reapack name="Lee_RadialMenu.lua" type="script" desc="Lee Radial Menu Tool">
       <metadata>
