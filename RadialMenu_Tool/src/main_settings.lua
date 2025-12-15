@@ -107,6 +107,14 @@ function M.init()
     state.current_preset_name = config_manager.get_current_preset_name() or "Default"
     state.save_feedback_time = 0
     removed_sector_stash = {}  -- 清空扇区缓存（确保每次打开编辑器时都是干净的状态）
+
+    -- Link search state to runtime shared state so browser search boxes persist
+    -- across different UI contexts. Use global runtime state if available.
+    if _G and _G.RadialMenuRuntimeState and _G.RadialMenuRuntimeState.search then
+        state.search = _G.RadialMenuRuntimeState.search
+    else
+        state.search = { actions = "", fx = "" }
+    end
     
     -- 标记设置窗口已打开
     reaper.SetExtState("RadialMenu", "SettingsOpen", "1", false)
@@ -1161,14 +1169,20 @@ end
 -- 绘制 Action 浏览器（高性能，使用 ListClipper，固定头部）
 function M.draw_action_browser()
     -- 搜索框（在 Child 外面，不滚动）
-    local search_changed, new_search = reaper.ImGui_InputText(ctx, "##ActionSearch", action_search_text, 256)
+    -- Action search is stored in the shared state (state.search.actions)
+    local search_text = ""
+    if state and state.search and state.search.actions then search_text = state.search.actions end
+    local search_changed, new_search = reaper.ImGui_InputText(ctx, "##ActionSearch", search_text, 256)
     if search_changed then
-        action_search_text = new_search
+        state.search = state.search or { actions = "", fx = "" }
+        state.search.actions = new_search
         -- 重新过滤
-        actions_filtered = M.filter_actions(action_search_text)
+        actions_filtered = M.filter_actions(state.search.actions)
     elseif #actions_filtered == 0 then
-        -- 初始化过滤列表
-        actions_filtered = M.filter_actions(action_search_text)
+        -- 初始化过滤列表 (use shared state)
+        local init_search = ""
+        if state and state.search and state.search.actions then init_search = state.search.actions end
+        actions_filtered = M.filter_actions(init_search)
     end
     
     -- 列表区域（可滚动）
@@ -1240,9 +1254,12 @@ function M.draw_fx_browser()
     local avail_w = reaper.ImGui_GetContentRegionAvail(ctx)
     local search_w = math.max(150, avail_w - 8)  -- 至少 150 像素宽
     reaper.ImGui_SetNextItemWidth(ctx, search_w)
-    local search_changed, new_search = reaper.ImGui_InputText(ctx, "##FXSearch", fx_search_text, 256)
+    local fx_text = ""
+    if state and state.search and state.search.fx then fx_text = state.search.fx end
+    local search_changed, new_search = reaper.ImGui_InputText(ctx, "##FXSearch", fx_text, 256)
     if search_changed then
-        fx_search_text = new_search
+        state.search = state.search or { actions = "", fx = "" }
+        state.search.fx = new_search
     end
     
     -- 准备显示列表（根据过滤器）
@@ -1263,9 +1280,11 @@ function M.draw_fx_browser()
     end
     
     -- 应用搜索过滤
-    if fx_search_text and fx_search_text ~= "" then
+    local fx_search_val = ""
+    if state and state.search and state.search.fx then fx_search_val = state.search.fx end
+    if fx_search_val and fx_search_val ~= "" then
         local filtered = {}
-        local lower_search = string.lower(fx_search_text)
+        local lower_search = string.lower(fx_search_val)
         for _, item in ipairs(display_list) do
             local name = item.name or ""
             if string.find(string.lower(name), lower_search, 1, true) then

@@ -145,7 +145,7 @@ function M.draw(ctx, slot, index, sector, state)
     -- It is being moved to the browser section.
     if slot.type == "fx" then
         reaper.ImGui_Spacing(ctx)
-        reaper.ImGui_TextDisabled(ctx, "提示: 推荐从右侧 FX 列表拖入，手写需精准")
+        reaper.ImGui_TextDisabled(ctx, "提示: 推荐从下方 FX 列表拖入，手写需精准")
     end
 end
 

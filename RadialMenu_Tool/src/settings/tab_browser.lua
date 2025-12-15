@@ -18,9 +18,13 @@ local utils_fx = require("utils_fx")
 local actions_cache = nil  -- Action 列表缓存
 local actions_by_id = {}  -- [PERF] Action ID -> Name 映射表，用于 O(1) 查找
 local actions_filtered = {}  -- 过滤后的 Action 列表
-local action_search_text = ""  -- Action 搜索文本
+-- Search text is stored in the shared `state.search` provided by the caller.
 local browser_tab = 0  -- 浏览器标签页 (0=Actions, 1=FX)
-local fx_search_text = ""  -- FX 搜索文本
+-- Track previous tab to detect tab switches (for one-time copy)
+local prev_browser_tab = nil
+-- Focus flags: when true, set keyboard focus to the next InputText of that tab
+local focus_next_action = false
+local focus_next_fx = false
 local current_fx_filter = "All"  -- 当前 FX 过滤器 (All, VST, VST3, JS, AU, CLAP, LV2, Chain, Template)
 local action_list_clipper = nil  -- ListClipper 缓存（使用 ValidatePtr 验证有效性）
 local fx_list_clipper = nil  -- FX ListClipper 缓存
@@ -123,6 +127,9 @@ end
 function M.draw(ctx, sector, state)
     -- 标签栏（直接绘制在父窗口中，不滚动）
     if reaper.ImGui_BeginTabBar(ctx, "##ResourceTabs", reaper.ImGui_TabBarFlags_None()) then
+        -- Save old value for change detection
+        local old_tab = browser_tab
+
         -- Actions 标签页
         if reaper.ImGui_BeginTabItem(ctx, "Actions") then
             browser_tab = 0
@@ -134,8 +141,31 @@ function M.draw(ctx, sector, state)
             browser_tab = 1
             reaper.ImGui_EndTabItem(ctx)
         end
-        
+
         reaper.ImGui_EndTabBar(ctx)
+
+        -- Detect one-time tab switch and copy search text accordingly
+        if prev_browser_tab ~= nil and prev_browser_tab ~= browser_tab then
+            -- Only copy when switching tabs (once)
+            if browser_tab == 1 and prev_browser_tab == 0 then
+                -- Actions -> FX: copy actions into fx
+                state.search = state.search or { actions = "", fx = "" }
+                if state.search.actions and (state.search.actions ~= "") then
+                    state.search.fx = state.search.actions
+                end
+                focus_next_fx = true
+            elseif browser_tab == 0 and prev_browser_tab == 1 then
+                -- FX -> Actions: copy fx into actions
+                state.search = state.search or { actions = "", fx = "" }
+                if state.search.fx and (state.search.fx ~= "") then
+                    state.search.actions = state.search.fx
+                end
+                focus_next_action = true
+            end
+        end
+
+        -- Update prev_browser_tab for next frame
+        prev_browser_tab = browser_tab
     end
     
     -- 绘制标签页内容（搜索栏和列表在各自的函数中处理）
@@ -189,11 +219,20 @@ function M.draw_action_browser(ctx, sector, state)
 
     -- 3. Search Bar (Fill remaining width)
     reaper.ImGui_SetNextItemWidth(ctx, -1)
-    local search_changed, new_search = reaper.ImGui_InputText(ctx, "##ActionSearch", action_search_text, 256)
+    -- If requested, set keyboard focus to this next widget (one-time)
+    if focus_next_action then
+        if reaper.ImGui_SetKeyboardFocusHere then reaper.ImGui_SetKeyboardFocusHere(ctx, 0) end
+        focus_next_action = false
+    end
+    -- Read/write search text from shared state (state.search.actions)
+    local search_text = ""
+    if state and state.search and state.search.actions then search_text = state.search.actions end
+    local search_changed, new_search = reaper.ImGui_InputText(ctx, "##ActionSearch", search_text, 256)
     if search_changed then
-        action_search_text = new_search
+        state.search = state.search or { actions = "", fx = "" }
+        state.search.actions = new_search
         -- 重新过滤
-        actions_filtered = M.filter_actions(action_search_text)
+        actions_filtered = M.filter_actions(state.search.actions)
         -- 如果选中的 action 不在过滤结果中，清除选择
         if selected_browser_action then
             local still_in_list = false
@@ -208,8 +247,10 @@ function M.draw_action_browser(ctx, sector, state)
             end
         end
     elseif #actions_filtered == 0 then
-        -- 初始化过滤列表
-        actions_filtered = M.filter_actions(action_search_text)
+        -- 初始化过滤列表 (use state.search.actions if available)
+        local init_search = ""
+        if state and state.search and state.search.actions then init_search = state.search.actions end
+        actions_filtered = M.filter_actions(init_search)
     end
     
     -- 列表区域（可滚动）
@@ -292,9 +333,18 @@ function M.draw_fx_browser(ctx, sector, state)
     local avail_w = reaper.ImGui_GetContentRegionAvail(ctx)
     local search_w = math.max(150, avail_w - 8)  -- 至少 150 像素宽
     reaper.ImGui_SetNextItemWidth(ctx, search_w)
-    local search_changed, new_search = reaper.ImGui_InputText(ctx, "##FXSearch", fx_search_text, 256)
+    -- If requested, set keyboard focus to this next widget (one-time)
+    if focus_next_fx then
+        if reaper.ImGui_SetKeyboardFocusHere then reaper.ImGui_SetKeyboardFocusHere(ctx, 0) end
+        focus_next_fx = false
+    end
+    -- Read/write FX search from shared state (state.search.fx)
+    local fx_text = ""
+    if state and state.search and state.search.fx then fx_text = state.search.fx end
+    local search_changed, new_search = reaper.ImGui_InputText(ctx, "##FXSearch", fx_text, 256)
     if search_changed then
-        fx_search_text = new_search
+        state.search = state.search or { actions = "", fx = "" }
+        state.search.fx = new_search
     end
     
     -- 准备显示列表（根据过滤器）
@@ -315,9 +365,11 @@ function M.draw_fx_browser(ctx, sector, state)
     end
     
     -- 应用搜索过滤
-    if fx_search_text and fx_search_text ~= "" then
+    local fx_search_val = ""
+    if state and state.search and state.search.fx then fx_search_val = state.search.fx end
+    if fx_search_val and fx_search_val ~= "" then
         local filtered = {}
-        local lower_search = string.lower(fx_search_text)
+        local lower_search = string.lower(fx_search_val)
         for _, item in ipairs(display_list) do
             local name = item.name or ""
             if string.find(string.lower(name), lower_search, 1, true) then

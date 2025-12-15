@@ -14,6 +14,22 @@ local styles = require("styles")
 local math_utils = require("math_utils")
 local execution = require("execution")
 
+-- queued execution support: when a slot is triggered from inside ImGui draw,
+-- we should not execute it immediately (which may pop dialogs and block UI).
+-- Instead, list_view/execution will call `execution.trigger_slot` as usual,
+-- but we wrap that function here to queue the slot and close the UI. The
+-- original trigger is invoked after the UI is cleaned up using `reaper.defer`.
+local queued_slot = nil
+local _orig_trigger_slot = nil
+if execution and execution.trigger_slot then
+    _orig_trigger_slot = execution.trigger_slot
+    execution.trigger_slot = function(slot)
+        -- queue slot for deferred execution and mark UI to close
+        queued_slot = slot
+        -- do NOT execute now — return early so ImGui draw remains responsive
+        return true
+    end
+end
 -- 运行时状态
 local ctx = nil
 local config = nil
@@ -147,6 +163,10 @@ function M.init()
     end
     
     -- 不再需要 gfx 窗口，使用 ImGui 原生按键检测
+    -- 初始化全局 runtime state（用于跨模块共享轻量状态，如搜索框内容）
+    _G.RadialMenuRuntimeState = _G.RadialMenuRuntimeState or {}
+    _G.RadialMenuRuntimeState.search = _G.RadialMenuRuntimeState.search or { actions = "", fx = "" }
+
     is_open = true
     return true
 end
@@ -350,6 +370,28 @@ function M.loop()
     
     -- 恢复窗口边框样式（在 End 之后配对 PopStyleVar）
     reaper.ImGui_PopStyleVar(ctx)
+
+    -- If a slot was queued during the ImGui frame, close the UI immediately
+    -- and defer the real execution to the next frame. This prevents actions
+    -- that pop modal dialogs from keeping the ImGui window open.
+    if queued_slot then
+        -- capture and clear queued slot
+        local slot_to_exec = queued_slot
+        queued_slot = nil
+
+        -- Close UI now
+        M.cleanup()
+
+        -- Defer actual execution to next frame (after UI destroyed)
+        if _orig_trigger_slot then
+            reaper.defer(function()
+                pcall(_orig_trigger_slot, slot_to_exec)
+            end)
+        end
+
+        -- Do not continue loop; UI closed. Return early.
+        return
+    end
     
     if open then
         reaper.defer(M.loop)
