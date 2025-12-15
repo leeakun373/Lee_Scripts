@@ -14,6 +14,14 @@ local im_utils = require("im_utils")
 local styles = require("styles")
 
 -- ============================================================================
+-- 模块状态变量
+-- ============================================================================
+
+-- [PERF] 预览配置缓存，避免每帧 deep_copy
+local vis_cache = nil
+local vis_cache_key = nil
+
+-- ============================================================================
 -- 辅助函数
 -- ============================================================================
 
@@ -164,10 +172,23 @@ function M.draw(ctx, config, state, callbacks)
         local center_x = px + w / 2
         local center_y = py + h / 2
         
-        -- Create a scaled-down config for visualization only
-        local vis_config = deep_copy_config(config)
-        vis_config.menu.outer_radius = 80  -- Fixed visual size
-        vis_config.menu.inner_radius = 25
+        -- [PERF] 生成轻量 key 用于缓存失效检测
+        local key = tostring(config.version or '') .. '|' .. 
+                   tostring(#(config.menu and config.menu.sectors or {})) .. '|' .. 
+                   tostring(config.menu and config.menu.inner_radius or '') .. '|' .. 
+                   tostring(config.menu and config.menu.outer_radius or '') .. '|' .. 
+                   tostring((config.colors and config.colors.wheel_bg) or '')
+        
+        -- [PERF] 只有当 key 变化时才重新 deep_copy
+        if key ~= vis_cache_key then
+            vis_cache = deep_copy_config(config)
+            vis_cache.menu.outer_radius = 80  -- Fixed visual size
+            vis_cache.menu.inner_radius = 25
+            vis_cache_key = key
+        end
+        
+        -- Create a scaled-down config for visualization only (使用缓存)
+        local vis_config = vis_cache or config
         
         -- Draw preview
         local draw_list = reaper.ImGui_GetWindowDrawList(ctx)

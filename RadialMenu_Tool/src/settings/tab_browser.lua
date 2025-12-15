@@ -16,6 +16,7 @@ local utils_fx = require("utils_fx")
 -- ============================================================================
 
 local actions_cache = nil  -- Action 列表缓存
+local actions_by_id = {}  -- [PERF] Action ID -> Name 映射表，用于 O(1) 查找
 local actions_filtered = {}  -- 过滤后的 Action 列表
 local action_search_text = ""  -- Action 搜索文本
 local browser_tab = 0  -- 浏览器标签页 (0=Actions, 1=FX)
@@ -55,6 +56,14 @@ function M.load_actions()
     table.sort(actions_cache, function(a, b)
         return (a.name or "") < (b.name or "")
     end)
+    
+    -- [PERF] 构建 ID -> Name 映射表，用于 O(1) 查找
+    actions_by_id = {}
+    for _, action in ipairs(actions_cache) do
+        if action.command_id then
+            actions_by_id[action.command_id] = action.name or "Unknown Action"
+        end
+    end
     
     return actions_cache
 end
@@ -386,6 +395,18 @@ function M.get_actions_cache()
         M.load_actions()
     end
     return actions_cache
+end
+
+-- [PERF] 根据 command_id 获取 Action 名称（O(1) 查找）
+function M.get_action_name_by_id(command_id)
+    if not command_id then
+        return "Unknown Action"
+    end
+    -- 如果 map 为空，确保先加载 actions
+    if next(actions_by_id) == nil then
+        M.load_actions()
+    end
+    return actions_by_id[command_id] or "Unknown Action"
 end
 
 return M

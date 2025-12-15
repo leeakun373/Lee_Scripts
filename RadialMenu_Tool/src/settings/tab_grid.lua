@@ -135,17 +135,8 @@ function M.draw(ctx, sector, state)
                             -- Content Generation
                             if slot.type == "action" then
                                 local cmd_id = slot.data and slot.data.command_id
-                                -- Fetch original name from actions cache
-                                local orig_name = "Unknown Action"
-                                local actions_cache = tab_browser.get_actions_cache()
-                                if actions_cache then
-                                    for _, action in ipairs(actions_cache) do
-                                        if action.command_id == cmd_id then
-                                            orig_name = action.name or "Unknown Action"
-                                            break
-                                        end
-                                    end
-                                end
+                                -- [PERF] O(1) 查找 Action 名称，替代线性搜索
+                                local orig_name = tab_browser.get_action_name_by_id(cmd_id)
                                 
                                 -- Format: "2020: Action: Disarm action"
                                 reaper.ImGui_Text(ctx, string.format("%s: Action: %s", tostring(cmd_id), orig_name))

@@ -29,7 +29,7 @@ end
 -- 包含 6 个扇区，每个扇区 12 个空槽位
 function M.get_default()
     return {
-        version = "1.1.2",
+        version = "1.1.3",
         
         -- 菜单外观设置
         menu = {
@@ -86,6 +86,11 @@ function M.get_default()
                 color = {34, 139, 34, 200},   -- Forest Green
                 slots = {}
             }
+        },
+        
+        -- Debug 配置
+        debug = {
+            show_perf_hud = false  -- 是否显示性能 HUD
         }
     }
 end

@@ -44,6 +44,24 @@ local last_submenu_state = false
 local last_active_sector_id = nil
 -- 扇区扩展动画状态（每个扇区ID对应一个0.0-1.0的进度值）
 local sector_anim_states = {}
+-- [ANIM] dt 驱动动画所需的时间跟踪
+local last_frame_time = nil
+local current_frame_dt = 0.0  -- 当前帧的 dt，供 draw 函数使用
+-- [PERF] 性能统计变量
+local perf_frame_count = 0
+local perf_wheel_time = 0.0
+local perf_ui_time = 0.0
+local perf_last_text = ""
+-- [PERF] 动画活跃状态跟踪（用于动态帧率）
+local anim_active = false
+local last_interact_time = 0
+local last_hover_sector_id = nil
+local last_mouse_x = nil
+local last_mouse_y = nil
+-- [PERF] 动态帧率常量
+local ACTIVE_FPS = 120  -- 活动时的目标帧率
+local IDLE_FPS = 20     -- 静态时的目标帧率
+local idle_frame_accumulator = 0.0  -- idle 模式下的帧累计时间
 
 -- [Context Tracking] 记录最后一次有效的 Context
 -- 用于解决 ImGui 抢走焦点导致 GetCursorContext 返回不准确的问题
@@ -165,6 +183,16 @@ end
 function M.loop()
     if not ctx then return end
     
+    -- [ANIM] 计算 dt（时间差）用于时间驱动的动画
+    local now = reaper.time_precise()
+    current_frame_dt = 0.0
+    if last_frame_time then
+        current_frame_dt = now - last_frame_time
+        -- Clamp dt 避免切后台回来瞬移
+        current_frame_dt = math.min(math.max(current_frame_dt, 0.0), 0.05)
+    end
+    last_frame_time = now
+    
     -- [核心] 配置热重载检测
     local current_update_time = reaper.GetExtState("RadialMenu", "ConfigUpdated")
     if current_update_time and current_update_time ~= "" then
@@ -282,21 +310,43 @@ function M.loop()
         is_first_display = false
     end
     
+    -- [PERF] 动态帧率策略：根据 anim_active 决定是否需要绘制
+    local should_draw = true
+    if not anim_active then
+        -- Idle 模式：累计时间，只有达到目标帧间隔才绘制
+        local target_dt = 1.0 / IDLE_FPS
+        idle_frame_accumulator = idle_frame_accumulator + current_frame_dt
+        if idle_frame_accumulator < target_dt then
+            should_draw = false  -- 跳过本次绘制
+        else
+            -- [PERF] 减去 target_dt 保留余量，而不是清零，减少 idle 节奏抖动
+            idle_frame_accumulator = idle_frame_accumulator - target_dt
+        end
+    else
+        -- Active 模式：重置累计器，每帧都绘制
+        idle_frame_accumulator = 0
+    end
+    
     -- 强制去除窗口边框（在 Begin 之前设置）
     reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_WindowBorderSize(), 0.0)
     
+    -- [PERF] 永远每帧都 Begin/End（D3D10 必须，避免闪烁）
+    -- 轮盘必须每帧绘制，性能优化只能做"减少计算"，不能做"跳过绘制"
     local visible, open = reaper.ImGui_Begin(ctx, "Radial Menu", true, window_flags)
     
+    -- 轮盘必须每帧都绘制（避免透明背景下出现/消失导致闪烁）
+    -- should_draw 只用于控制是否执行额外的计算/更新，不影响绘制
     if visible then
-        M.draw()
+        M.draw(should_draw)
         
         -- [关键] 检查鼠标是否在交互区域内
         -- 如果鼠标不在任何可交互元素上，通过 reaper.JS 或 API 让点击穿透 (ReaImGui 较难直接实现完美穿透)
         -- 替代方案：让窗口本身 NoBackground 且 NoDecoration，Reaper 通常会处理好透明区域的点击。
         -- 如果你发现还是挡住了，说明 ReaImGui 的窗口捕获了所有点击。
-        
-        reaper.ImGui_End(ctx)
     end
+    
+    -- [PERF] ImGui_End 必须无条件调用（Begin 后必须 End，不管 visible 是否为 true）
+    reaper.ImGui_End(ctx)
     
     -- 恢复窗口边框样式（在 End 之后配对 PopStyleVar）
     reaper.ImGui_PopStyleVar(ctx)
@@ -310,7 +360,14 @@ end
 -- Phase 2 - 绘制界面 & 交互
 -- ============================================================================
 
-function M.draw()
+function M.draw(should_update)
+    -- [PERF] should_update 用于控制是否执行昂贵计算（如鼠标检测），但不影响绘制
+    -- 轮盘必须每帧都绘制，避免透明背景下出现/消失导致闪烁
+    should_update = should_update ~= false  -- 默认 true
+    
+    -- [PERF] 记录 UI 绘制开始时间
+    local ui_start_time = reaper.time_precise()
+    
     reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_WindowPadding(), 0, 0)
     
     local win_w, win_h = reaper.ImGui_GetWindowSize(ctx)
@@ -331,6 +388,53 @@ function M.draw()
         local open_dur = config.menu.animation.duration_open or 0.06
         local t_open = math.max(0, math.min(1, (now - anim_open_start_time) / open_dur))
         anim_scale = math_utils.ease_out_cubic(t_open)
+    end
+    
+    -- [PERF] 判定是否需要持续重绘（anim_active）
+    -- anim_active 必须始终准确，因为它影响 should_draw 的计算
+    -- 但可以在 should_update=false 时跳过昂贵的鼠标检测
+    anim_active = false
+    if is_open then
+        -- 1. 检查鼠标位置变化（DPI-aware 阈值）- 仅在 should_update 时执行
+        if should_update then
+            local mouse_x, mouse_y = reaper.ImGui_GetMousePos(ctx)
+            if last_mouse_x and last_mouse_y then
+                -- 获取 UI scale（DPI-aware）
+                -- 通过字体大小估算（默认字体通常是 13px，假设 baseline 是 1.0）
+                local ui_scale = 1.0
+                local font_size = reaper.ImGui_GetFontSize(ctx)
+                if font_size and font_size > 0 then
+                    ui_scale = font_size / 13.0  -- 13px 是 ImGui 的默认字体大小
+                end
+                -- DPI-aware 阈值：2 像素 * UI scale
+                local mouse_threshold = 2.0 * ui_scale
+                local mouse_dx = math.abs(mouse_x - last_mouse_x)
+                local mouse_dy = math.abs(mouse_y - last_mouse_y)
+                if mouse_dx > mouse_threshold or mouse_dy > mouse_threshold then
+                    anim_active = true
+                end
+                last_mouse_x = mouse_x
+                last_mouse_y = mouse_y
+            else
+                -- 首次运行，需要更新
+                anim_active = true
+                last_mouse_x = mouse_x
+                last_mouse_y = mouse_y
+            end
+        end
+        
+        -- 2. 检查 hover 扇区变化（稍后在代码中更新，仅 should_update 时执行）
+        -- 3. 检查 expansion 动画是否收敛（稍后在代码中检查，必须执行）
+        
+        -- 4. 检查轮盘展开动画是否完成
+        if anim_scale < 1.0 then
+            anim_active = true
+        end
+        
+        -- 5. 检查最近 0.2 秒内是否有交互
+        if (now - last_interact_time) < 0.2 then
+            anim_active = true
+        end
     end
     
     -- ============================================================
@@ -377,15 +481,14 @@ function M.draw()
     -- Check toggle first
     local expansion_enabled = (config.menu.enable_sector_expansion ~= false) -- Default true
     
-    -- 计算当前悬停的扇区ID（需要在绘制前获取，只计算一次）
+    -- 计算当前悬停的扇区ID（仅在 should_update 时执行，节省性能）
     local current_hover_id = nil
-    if expansion_enabled and config.sectors then
-        local mouse_x, mouse_y = reaper.ImGui_GetMousePos(ctx)
+    if should_update and expansion_enabled and config.sectors and last_mouse_x and last_mouse_y then
         local center_x = win_x + win_w / 2
         local center_y = win_y + win_h / 2
         
         local math_utils = require("math_utils")
-        local angle, distance = math_utils.get_mouse_angle_and_distance(mouse_x, mouse_y, center_x, center_y)
+        local angle, distance = math_utils.get_mouse_angle_and_distance(last_mouse_x, last_mouse_y, center_x, center_y)
         -- 注意：悬停检测使用原始半径，不受轮盘展开动画影响
         local inner_radius = config.menu.inner_radius
         local outer_radius = config.menu.outer_radius
@@ -396,6 +499,15 @@ function M.draw()
                 current_hover_id = config.sectors[sector_index].id
             end
         end
+        
+        -- [PERF] 检查 hover 扇区变化
+        if current_hover_id ~= last_hover_sector_id then
+            anim_active = true
+            last_hover_sector_id = current_hover_id
+        end
+    else
+        -- should_update=false 时，保持上次的 hover_id
+        current_hover_id = last_hover_sector_id
     end
     
     if config.sectors then
@@ -414,13 +526,13 @@ function M.draw()
                 end
             end
             
-            -- [CHANGED] Convert 1-10 integer scale to 0.05-0.50 Lerp factor
+            -- [ANIM] Convert 1-10 integer scale to exponential smoothing factor k
             -- Handle backward compatibility: old format was float (0.0-1.0), new format is int (1-10)
             local speed_level_raw = config.menu.hover_animation_speed or 4
             local speed_level
             if type(speed_level_raw) == "number" then
                 if speed_level_raw < 1 then
-                    -- Old format: convert 0.0-1.0 to 1-10 scale, then to lerp factor
+                    -- Old format: convert 0.0-1.0 to 1-10 scale
                     speed_level = math.max(1, math.min(10, math.floor((speed_level_raw / 0.05) + 0.5)))
                 else
                     -- New format: already 1-10
@@ -429,12 +541,17 @@ function M.draw()
             else
                 speed_level = 4  -- Default fallback
             end
-            -- Formula: Level * 0.05. (Level 1=0.05, Level 10=0.50)
-            local expansion_speed = speed_level * 0.05
+            -- [ANIM] Exponential smoothing: k = 6 + (level-1) * 2 (level 1..10 => k 6..24)
+            local k = 6 + (speed_level - 1) * 2
             
-            -- Apply Lerp
-            if math.abs(current_val - target_val) > 0.001 then
-                sector_anim_states[id] = current_val + (target_val - current_val) * expansion_speed
+            -- [ANIM] Apply exponential smoothing (dt-driven, frame-rate independent)
+            -- [PERF] expansion 是归一化值（0.0-1.0），使用合适的 settle_epsilon 避免永远 active 或太早 idle
+            local settle_epsilon = 0.002  -- 归一化值的 0.2%
+            if math.abs(current_val - target_val) > settle_epsilon then
+                local alpha = 1 - math.exp(-k * current_frame_dt)
+                sector_anim_states[id] = current_val + (target_val - current_val) * alpha
+                -- [PERF] expansion 动画尚未收敛，需要持续重绘
+                anim_active = true
             else
                 sector_anim_states[id] = target_val
             end
@@ -462,8 +579,13 @@ function M.draw()
     -- ============================================================
     -- 2. 绘制轮盘 (上层，遮挡子菜单)
     -- ============================================================
+    -- [PERF] 记录轮盘绘制开始时间
+    local wheel_start_time = reaper.time_precise()
     local active_id = (show_submenu and clicked_sector) and clicked_sector.id or nil
     wheel.draw_wheel(ctx, config, active_id, is_pinned, anim_scale, sector_anim_states)
+    -- [PERF] 记录轮盘绘制耗时
+    local wheel_time = reaper.time_precise() - wheel_start_time
+    perf_wheel_time = perf_wheel_time + wheel_time
     
     -- ============================================================
     -- 3. 优化拖拽手感：InvisibleButton 覆盖中心
@@ -481,36 +603,40 @@ function M.draw()
     -- 利用 IsItemActive (按下并保持) 来驱动移动
     if reaper.ImGui_IsItemActive(ctx) and reaper.ImGui_IsMouseDragging(ctx, 0) then
         center_drag_started = true
+        
+        -- [FIX] 先获取 delta，然后立即重置，避免累积导致卡顿
         local dx, dy = reaper.ImGui_GetMouseDelta(ctx, 0)
-        local new_x = win_x + dx
-        local new_y = win_y + dy
-        
-        -- 获取视口信息，确保拖动时窗口不超出屏幕边界
-        local viewport = reaper.ImGui_GetMainViewport(ctx)
-        if viewport then
-            local vp_x, vp_y = reaper.ImGui_Viewport_GetPos(viewport)
-            local vp_w, vp_h = reaper.ImGui_Viewport_GetSize(viewport)
-            
-            -- 确保窗口不超出屏幕边界
-            if new_x < vp_x then
-                new_x = vp_x
-            end
-            if new_x + win_w > vp_x + vp_w then
-                new_x = vp_x + vp_w - win_w
-            end
-            if new_y < vp_y then
-                new_y = vp_y
-            end
-            if new_y + win_h > vp_y + vp_h then
-                new_y = vp_y + vp_h - win_h
-            end
-        end
-        
-        reaper.ImGui_SetWindowPos(ctx, new_x, new_y)
-        
-        -- 注意：ReaImGui 可能没有 ResetMouseDragDelta 函数，如果报错可以注释掉
         if reaper.ImGui_ResetMouseDragDelta then
             reaper.ImGui_ResetMouseDragDelta(ctx, 0)
+        end
+        
+        -- [PERF] 只有鼠标确实移动了才更新窗口位置
+        if math.abs(dx) > 0.001 or math.abs(dy) > 0.001 then
+            local new_x = win_x + dx
+            local new_y = win_y + dy
+            
+            -- 获取视口信息，确保拖动时窗口不超出屏幕边界
+            local viewport = reaper.ImGui_GetMainViewport(ctx)
+            if viewport then
+                local vp_x, vp_y = reaper.ImGui_Viewport_GetPos(viewport)
+                local vp_w, vp_h = reaper.ImGui_Viewport_GetSize(viewport)
+                
+                -- 确保窗口不超出屏幕边界（分别处理 X 和 Y，允许一个方向受限时另一个方向仍可移动）
+                if new_x < vp_x then
+                    new_x = vp_x
+                elseif new_x + win_w > vp_x + vp_w then
+                    new_x = vp_x + vp_w - win_w
+                end
+                
+                if new_y < vp_y then
+                    new_y = vp_y
+                elseif new_y + win_h > vp_y + vp_h then
+                    new_y = vp_y + vp_h - win_h
+                end
+            end
+            
+            -- 更新窗口位置（即使位置没有实际改变也要调用，确保状态同步）
+            reaper.ImGui_SetWindowPos(ctx, new_x, new_y)
         end
     end
     
@@ -615,6 +741,53 @@ function M.draw()
     end
     
     reaper.ImGui_PopStyleVar(ctx)
+    
+    -- [PERF] 记录 UI 绘制总耗时
+    local ui_time = reaper.time_precise() - ui_start_time
+    perf_ui_time = perf_ui_time + ui_time
+    
+    -- [PERF] 每 30 帧更新一次性能 HUD
+    perf_frame_count = perf_frame_count + 1
+    if perf_frame_count >= 30 then
+        local avg_wheel = perf_wheel_time / 30.0
+        local avg_ui = perf_ui_time / 30.0
+        perf_last_text = string.format("Wheel: %.2fms | UI: %.2fms", avg_wheel * 1000, avg_ui * 1000)
+        
+        -- 重置计数器
+        perf_frame_count = 0
+        perf_wheel_time = 0.0
+        perf_ui_time = 0.0
+    end
+    
+    -- [PERF] 绘制性能 HUD（右上角）- 仅在 debug 模式开启时显示
+    if config.debug and config.debug.show_perf_hud then
+        if perf_last_text and perf_last_text ~= "" and not center_drag_started then
+            local draw_list = reaper.ImGui_GetWindowDrawList(ctx)
+            if draw_list then
+                local win_w, win_h = reaper.ImGui_GetWindowSize(ctx)
+                local win_x, win_y = reaper.ImGui_GetWindowPos(ctx)
+                
+                -- 使用窗口坐标而不是屏幕坐标，避免拖拽时位置错误
+                local text_x = win_w - 8
+                local text_y = 8
+                
+                -- 计算文本宽度以便右对齐
+                local text_w, text_h = reaper.ImGui_CalcTextSize(ctx, perf_last_text)
+                text_x = text_x - text_w
+                
+                -- 绘制半透明背景（使用窗口相对坐标）
+                local bg_color = 0x80000000  -- 半透明黑色
+                reaper.ImGui_DrawList_AddRectFilled(draw_list, 
+                    win_x + text_x - 4, win_y + text_y - 2,
+                    win_x + win_w - 4, win_y + text_y + text_h + 2,
+                    bg_color, 0, 0)
+                
+                -- 绘制文本（使用窗口相对坐标）
+                local text_color = 0xFFFFFFFF  -- 白色
+                reaper.ImGui_DrawList_AddText(draw_list, win_x + text_x, win_y + text_y, text_color, perf_last_text)
+            end
+        end
+    end
 end
 
 -- ============================================================================
@@ -650,7 +823,9 @@ function M.handle_sector_click(center_x, center_y, inner_radius, outer_radius, i
         
         -- 只有点击左键时触发
         if reaper.ImGui_IsMouseClicked(ctx, 0) then
-             local hovered_id = wheel.get_hovered_sector_id()
+            -- [PERF] 记录交互时间
+            last_interact_time = reaper.time_precise()
+            local hovered_id = wheel.get_hovered_sector_id()
              if hovered_id then
                  local sector = config_manager.get_sector_by_id(config, hovered_id)
                  if sector then
@@ -665,6 +840,8 @@ function M.handle_sector_click(center_x, center_y, inner_radius, outer_radius, i
         -- [FIX] Only close if clicked AND NOT hovering the submenu AND NOT dragging
         -- 注意：子菜单是独立窗口，ImGui 会自动处理子菜单内的点击，不会传播到这里
         if reaper.ImGui_IsMouseClicked(ctx, 0) then
+            -- [PERF] 记录交互时间
+            last_interact_time = reaper.time_precise()
             if show_submenu and not is_submenu_hovered and not is_dragging then
                 -- 点击了外部且没有悬停在子菜单上，关闭子菜单
                 show_submenu = false

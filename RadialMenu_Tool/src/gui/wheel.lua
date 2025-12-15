@@ -149,7 +149,7 @@ function M.draw_sector(draw_list, ctx, center_x, center_y, sector, index, total_
     
     -- 绘制扇形（使用外圆颜色作为基础）
     M.draw_sector_arc_gradient(draw_list, center_x, center_y, inner_radius, outer_radius, 
-                                draw_start, draw_end, col_in, col_out)
+                                draw_start, draw_end, col_in, col_out, should_highlight)
     
     -- 如果激活，添加边缘高光
     if should_highlight then
@@ -165,10 +165,23 @@ function M.draw_sector(draw_list, ctx, center_x, center_y, sector, index, total_
     M.draw_sector_text(draw_list, ctx, center_x, center_y, text_radius, start_angle, end_angle, sector, should_highlight)
 end
 
--- 绘制扇形渐变（优化版：增加重叠消除接缝）
-function M.draw_sector_arc_gradient(draw_list, center_x, center_y, inner_radius, outer_radius, start_angle, end_angle, col_in, col_out)
-    -- 使用优化的四边形拼接，增加重叠来消除接缝
+-- 绘制扇形渐变（优化版：增加重叠消除接缝，动态降采样）
+function M.draw_sector_arc_gradient(draw_list, center_x, center_y, inner_radius, outer_radius, start_angle, end_angle, col_in, col_out, is_hovered)
+    -- [PERF] 动态 segments：根据半径和 hover 状态降采样
+    local avg_radius = (inner_radius + outer_radius) / 2
     local base_segments = 64
+    -- 小半径时减少 segments（确保判断顺序正确：先判断更小的值）
+    if avg_radius < 50 then
+        base_segments = 16
+    elseif avg_radius < 100 then
+        base_segments = 32
+    end
+    -- hovered 扇区允许更高精度，其它扇区更低
+    if not is_hovered and avg_radius >= 100 then
+        base_segments = math.floor(base_segments * 0.75)  -- 非 hovered 扇区降低 25%
+    end
+    
+    -- 使用优化的四边形拼接，增加重叠来消除接缝
     local angle_span = end_angle - start_angle
     if angle_span < 0 then angle_span = angle_span + 2 * math.pi end
     local sector_segments = math.max(16, math.floor(base_segments * angle_span / (2 * math.pi)))
