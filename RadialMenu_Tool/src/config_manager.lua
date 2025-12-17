@@ -1,616 +1,628 @@
 -- @description RadialMenu Tool - 配置管理器
 -- @author Lee
 -- @about
---   负责配置文件的读取、保存和验证
---   使用 JSON 格式存储配置
+--   负责配置文件的读取、保存、校验与预设管理。
+--
+--   Refactor notes (Phase 1):
+--   - 默认值迁移至 `src/config_defaults.lua`（纯数据）
+--   - load() 时执行“静默补全”：将缺失字段从 defaults deep_merge 进用户配置并自动保存
+--   - 提供 Preset System 2.0 API：Blank / Duplicate / Rename
 
 local M = {}
 
--- 加载 JSON 库（使用 dkjson）
 local json = require("json")
+local DEFAULTS = require("config_defaults")
 
 -- ============================================================================
--- 配置文件路径
+-- 路径
 -- ============================================================================
 
--- 获取配置文件路径
 function M.get_config_path()
-    local script_path = debug.getinfo(1, "S").source:match("@?(.*[\\/])") or ""
-    -- 向上两级到 RadialMenu_Tool 根目录
-    local root_path = script_path:match("(.*)src[\\/]") or script_path
-    return root_path .. "config.json"
+  local script_path = debug.getinfo(1, "S").source:match("@?(.*[\\/])") or ""
+  -- 向上两级到 RadialMenu_Tool 根目录
+  local root_path = script_path:match("(.*)src[\\/]") or script_path
+  return root_path .. "config.json"
 end
 
 -- ============================================================================
--- 默认配置结构
+-- 内部工具：deep copy / deep merge
 -- ============================================================================
 
--- 返回默认配置表结构
--- 包含 6 个扇区，每个扇区 12 个空槽位
+local function is_array(t)
+  return type(t) == "table" and #t > 0
+end
+
+-- Robust deep copy with cycle protection.
+function M.deep_copy_config(src, memo)
+  if type(src) ~= "table" then return src end
+  memo = memo or {}
+  if memo[src] then return memo[src] end
+
+  local dst = {}
+  memo[src] = dst
+
+  for k, v in pairs(src) do
+    dst[M.deep_copy_config(k, memo)] = M.deep_copy_config(v, memo)
+  end
+
+  return dst
+end
+
+-- Deep-merge only MISSING fields from source into target.
+-- - Does NOT overwrite existing target values
+-- - Does NOT merge arrays (keeps target arrays as-is)
+-- Returns: changed:boolean
+local function deep_merge_missing(target, source, opts)
+  if type(target) ~= "table" or type(source) ~= "table" then return false end
+  opts = opts or {}
+  local ignore = opts.ignore_keys or {}
+
+  local changed = false
+
+  for key, value in pairs(source) do
+    if not ignore[key] then
+      if target[key] == nil then
+        target[key] = M.deep_copy_config(value)
+        changed = true
+      elseif type(value) == "table" and type(target[key]) == "table" then
+        if not is_array(value) and not is_array(target[key]) then
+          if deep_merge_missing(target[key], value, opts) then
+            changed = true
+          end
+        end
+      end
+    end
+  end
+
+  return changed
+end
+
+local function schema_version()
+  return DEFAULTS.CONFIG_SCHEMA_VERSION or DEFAULTS.version or "1.1.6"
+end
+
+local INTERNAL_KEYS = { CONFIG_SCHEMA_VERSION = true }
+
+-- Normalize a config object against defaults.
+-- - ensures version exists and matches schema
+-- - merges missing fields from defaults
+-- Returns: normalized_config, changed:boolean
+local function normalize_config(cfg)
+  if type(cfg) ~= "table" then
+    cfg = {}
+  end
+
+  local changed = false
+
+  -- Ensure version
+  local sv = schema_version()
+  if cfg.version ~= sv then
+    cfg.version = sv
+    changed = true
+  end
+
+  -- Fill missing structure
+  if deep_merge_missing(cfg, DEFAULTS, { ignore_keys = INTERNAL_KEYS }) then
+    changed = true
+  end
+
+  -- Never persist internal keys
+  if cfg.CONFIG_SCHEMA_VERSION ~= nil then
+    cfg.CONFIG_SCHEMA_VERSION = nil
+    changed = true
+  end
+
+  return cfg, changed
+end
+
+-- Public: default config (safe copy, no internal keys)
 function M.get_default()
-    return {
-        version = "1.1.4",
-        
-        -- 菜单外观设置
-        menu = {
-            outer_radius = 90,            -- 轮盘外半径
-            inner_radius = 25,            -- 中心圆半径（死区）
-            sector_border_width = 2,      -- 扇区边框宽度
-            hover_brightness = 1.3,       -- 悬停时亮度增加倍数
-            animation_speed = 0.2,        -- 动画速度
-            max_slots_per_sector = 9,     -- 每个扇区最大槽位数
-            hover_to_open = true,         -- 悬停打开子菜单（true = 悬停打开，false = 点击打开）
-            -- Sector Expansion Settings
-            enable_sector_expansion = true, -- 启用扇区膨胀动画
-            hover_expansion_pixels = 10,   -- 悬停时扇区向外扩展的像素数
-            hover_animation_speed = 4,     -- 悬停扩展动画速度 (1-10 整数刻度，默认 4 = 平衡)
-            slot_width = 65,              -- 子菜单插槽宽度（像素）
-            slot_height = 25,             -- 子菜单插槽高度（像素）
-            animation = {
-                enable = true,             -- 是否启用动画
-                duration_open = 0.06,      -- 轮盘展开时间（秒）- 极速模式
-                duration_submenu = 0.05    -- 子菜单弹出时间（秒）- 极速模式
-            }
-        },
-        
-        -- 颜色配置（RGBA格式，0-255）
-        colors = {
-            background = {30, 30, 30, 240},
-            center_circle = {50, 50, 50, 255},
-            border = {100, 100, 100, 200},
-            hover_overlay = {255, 255, 255, 50},
-            text = {255, 255, 255, 255},
-            text_shadow = {0, 0, 0, 150}
-        },
-        
-        -- 扇区配置（3个默认扇区）
-        sectors = {
-            {
-                id = 1,
-                name = "Actions",
-                icon = "⚡",
-                color = {70, 130, 180, 200},  -- Steel Blue
-                slots = {}
-            },
-            {
-                id = 2,
-                name = "FX",
-                icon = "🎛️",
-                color = {138, 43, 226, 200},  -- Blue Violet
-                slots = {}
-            },
-            {
-                id = 3,
-                name = "View",
-                icon = "👁️",
-                color = {34, 139, 34, 200},   -- Forest Green
-                slots = {}
-            }
-        },
-        
-        -- Debug 配置
-        debug = {
-            show_perf_hud = false  -- 是否显示性能 HUD
-        }
-    }
+  local cfg = M.deep_copy_config(DEFAULTS)
+  cfg.CONFIG_SCHEMA_VERSION = nil
+  cfg.version = schema_version()
+  return cfg
 end
 
--- ============================================================================
--- 配置加载
--- ============================================================================
-
--- 内部函数：加载完整的配置文件结构（包含 presets）
-local function load_full_config()
-    local config_path = M.get_config_path()
-    
-    -- 检查文件是否存在
-    local file = io.open(config_path, "r")
-    if not file then
-        -- 文件不存在，创建新结构
-        local default_config = M.get_default()
-        local full_config = {
-            active_config = default_config,
-            presets = {
-                Default = default_config
-            },
-            current_preset_name = "Default"
-        }
-        -- 保存新结构
-        local success, err = json.save_to_file(full_config, config_path, true)
-        return full_config
-    end
-    file:close()
-    
-    -- 加载 JSON 文件
-    local full_config, err = json.load_from_file(config_path)
-    
-    if not full_config then
-        -- 加载失败，返回默认结构
-        local default_config = M.get_default()
-        return {
-            active_config = default_config,
-            presets = {
-                Default = default_config
-            },
-            current_preset_name = "Default"
-        }
-    end
-    
-    -- 检测旧版配置（没有 presets 字段）
-    if not full_config.presets then
-        -- 旧版配置，进行迁移
-        local old_config = full_config
-        local default_config = M.get_default()
-        
-        -- 合并旧配置与默认值
-        old_config = M.merge_with_defaults(old_config)
-        
-        -- 创建新结构
-        full_config = {
-            active_config = old_config,
-            presets = {
-                Default = old_config
-            },
-            current_preset_name = "Default"
-        }
-        
-        -- 保存迁移后的配置
-        json.save_to_file(full_config, config_path, true)
-    end
-    
-    -- 确保结构完整
-    if not full_config.active_config then
-        local default_config = M.get_default()
-        full_config.active_config = default_config
-    end
-    
-    if not full_config.presets then
-        full_config.presets = {}
-    end
-    
-    if not full_config.presets.Default then
-        local default_config = M.get_default()
-        full_config.presets.Default = default_config
-    end
-    
-    if not full_config.current_preset_name then
-        full_config.current_preset_name = "Default"
-    end
-    
-    -- 验证 active_config
-    local is_valid, error_msg = M.validate(full_config.active_config)
-    if not is_valid then
-        -- 验证失败，使用默认配置
-        local default_config = M.get_default()
-        full_config.active_config = default_config
-        full_config.presets.Default = default_config
-    else
-        -- 合并默认值确保完整性
-        full_config.active_config = M.merge_with_defaults(full_config.active_config)
-    end
-    
-    return full_config
-end
-
--- 从 config.json 加载配置
--- 返回当前激活的配置（active_config）
-function M.load()
-    local full_config = load_full_config()
-    return full_config.active_config
-end
-
--- ============================================================================
--- 配置保存
--- ============================================================================
-
--- 将配置保存到 config.json
--- 同时更新 active_config 和当前预设
-function M.save(config)
-    local config_path = M.get_config_path()
-    
-    -- 验证配置
-    local is_valid, error_msg = M.validate(config)
-    if not is_valid then
-        reaper.ShowMessageBox("配置验证失败: " .. error_msg, "错误", 0)
-        return false
-    end
-    
-    -- 加载完整配置结构
-    local full_config = load_full_config()
-    
-    -- 更新 active_config
-    full_config.active_config = config
-    
-    -- 更新当前预设（如果存在）
-    local current_preset_name = full_config.current_preset_name or "Default"
-    if full_config.presets[current_preset_name] then
-        full_config.presets[current_preset_name] = config
-    end
-    
-    -- 保存到文件（带缩进格式化）
-    local success, err = json.save_to_file(full_config, config_path, true)
-    
-    if not success then
-        reaper.ShowMessageBox("配置保存失败: " .. (err or "未知错误"), "错误", 0)
-        return false
-    end
-    
-    -- 发出配置更新信号，通知运行中的轮盘重新加载配置
-    reaper.SetExtState("RadialMenu", "ConfigUpdated", tostring(os.time()), false)
-    
-    -- reaper.ShowConsoleMsg("配置文件已保存: " .. config_path .. "\n")
-    return true
-end
-
--- ============================================================================
--- 配置验证
--- ============================================================================
-
--- 验证配置表结构是否正确
-function M.validate(config)
-    if not config then
-        return false, "配置为空"
-    end
-    
-    -- 检查版本号
-    if not config.version then
-        return false, "缺少版本号"
-    end
-    
-    -- 检查 menu 配置
-    if not config.menu then
-        return false, "缺少 menu 配置"
-    end
-    
-    if not config.menu.outer_radius or type(config.menu.outer_radius) ~= "number" then
-        return false, "menu.outer_radius 必须是数字"
-    end
-    
-    if not config.menu.inner_radius or type(config.menu.inner_radius) ~= "number" then
-        return false, "menu.inner_radius 必须是数字"
-    end
-    
-    -- 检查 colors 配置
-    if not config.colors then
-        return false, "缺少 colors 配置"
-    end
-    
-    -- 检查 sectors 配置
-    if not config.sectors then
-        return false, "缺少 sectors 配置"
-    end
-    
-    if type(config.sectors) ~= "table" then
-        return false, "sectors 必须是数组"
-    end
-    
-    if #config.sectors == 0 then
-        return false, "至少需要一个扇区"
-    end
-    
-    -- 验证每个扇区
-    for i, sector in ipairs(config.sectors) do
-        if not sector.id then
-            return false, "扇区 " .. i .. " 缺少 id"
-        end
-        
-        if not sector.name or type(sector.name) ~= "string" then
-            return false, "扇区 " .. i .. " 的 name 必须是字符串"
-        end
-        
-        if not sector.color or type(sector.color) ~= "table" or #sector.color < 3 then
-            return false, "扇区 " .. i .. " 的 color 格式错误"
-        end
-        
-        if not sector.slots or type(sector.slots) ~= "table" then
-            return false, "扇区 " .. i .. " 的 slots 必须是数组"
-        end
-        
-        -- 验证槽位
-        for j, slot in ipairs(sector.slots) do
-            -- [FIX] Allow "empty", "chain", "template" types
-            if not slot.type or (slot.type ~= "action" and slot.type ~= "fx" and slot.type ~= "chain" and slot.type ~= "template" and slot.type ~= "empty") then
-                return false, string.format("扇区 %d 槽位 %d 的 type 无效: %s", i, j, tostring(slot.type))
-            end
-            
-            -- [FIX] Skip detailed validation for empty slots
-            if slot.type ~= "empty" then
-                if not slot.name or type(slot.name) ~= "string" then
-                    return false, string.format("扇区 %d 槽位 %d 的 name 必须是字符串", i, j)
-                end
-                
-                if not slot.data or type(slot.data) ~= "table" then
-                    return false, string.format("扇区 %d 槽位 %d 的 data 必须是表", i, j)
-                end
-            end
-        end
-    end
-    
-    return true, nil
-end
-
--- ============================================================================
--- 配置合并
--- ============================================================================
-
--- 将加载的配置与默认配置合并，确保所有必需字段都存在
+-- Convenience: merge an existing config with defaults (returns merged copy)
 function M.merge_with_defaults(config)
-    local default = M.get_default()
-    
-    -- 深度合并函数
-    local function deep_merge(target, source)
-        for key, value in pairs(source) do
-            if target[key] == nil then
-                target[key] = value
-            elseif type(value) == "table" and type(target[key]) == "table" then
-                -- 递归合并表（但不合并数组）
-                if not (#value > 0) then  -- 不是数组
-                    deep_merge(target[key], value)
-                end
-            end
+  local cfg = M.deep_copy_config(config or {})
+  cfg, _ = normalize_config(cfg)
+  return cfg
+end
+
+-- ============================================================================
+-- 配置校验
+-- ============================================================================
+
+function M.validate(config)
+  if not config then
+    return false, "配置为空"
+  end
+
+  if not config.version then
+    return false, "缺少版本号"
+  end
+
+  if not config.menu then
+    return false, "缺少 menu 配置"
+  end
+
+  if not config.menu.outer_radius or type(config.menu.outer_radius) ~= "number" then
+    return false, "menu.outer_radius 必须是数字"
+  end
+
+  if not config.menu.inner_radius or type(config.menu.inner_radius) ~= "number" then
+    return false, "menu.inner_radius 必须是数字"
+  end
+
+  if not config.colors then
+    return false, "缺少 colors 配置"
+  end
+
+  if not config.sectors then
+    return false, "缺少 sectors 配置"
+  end
+
+  if type(config.sectors) ~= "table" then
+    return false, "sectors 必须是数组"
+  end
+
+  if #config.sectors == 0 then
+    return false, "至少需要一个扇区"
+  end
+
+  for i, sector in ipairs(config.sectors) do
+    if not sector.id then
+      return false, "扇区 " .. i .. " 缺少 id"
+    end
+
+    if not sector.name or type(sector.name) ~= "string" then
+      return false, "扇区 " .. i .. " 的 name 必须是字符串"
+    end
+
+    if not sector.color or type(sector.color) ~= "table" or #sector.color < 3 then
+      return false, "扇区 " .. i .. " 的 color 格式错误"
+    end
+
+    if not sector.slots or type(sector.slots) ~= "table" then
+      return false, "扇区 " .. i .. " 的 slots 必须是数组"
+    end
+
+    for j, slot in ipairs(sector.slots) do
+      if not slot.type or (slot.type ~= "action" and slot.type ~= "fx" and slot.type ~= "chain" and slot.type ~= "template" and slot.type ~= "empty") then
+        return false, string.format("扇区 %d 槽位 %d 的 type 无效: %s", i, j, tostring(slot.type))
+      end
+
+      if slot.type ~= "empty" then
+        if not slot.name or type(slot.name) ~= "string" then
+          return false, string.format("扇区 %d 槽位 %d 的 name 必须是字符串", i, j)
         end
-        return target
-    end
-    
-    return deep_merge(config, default)
-end
 
--- ============================================================================
--- 辅助函数
--- ============================================================================
-
--- 重置为默认配置
-function M.reset_to_default()
-    local default_config = M.get_default()
-    M.save(default_config)
-    return default_config
-end
-
--- 获取扇区数量
-function M.get_sector_count(config)
-    return config and config.sectors and #config.sectors or 0
-end
-
--- 根据 ID 获取扇区
-function M.get_sector_by_id(config, sector_id)
-    if not config or not config.sectors then
-        return nil
-    end
-    
-    for _, sector in ipairs(config.sectors) do
-        if sector.id == sector_id then
-            return sector
+        if not slot.data or type(slot.data) ~= "table" then
+          return false, string.format("扇区 %d 槽位 %d 的 data 必须是表", i, j)
         end
+      end
     end
-    
-    return nil
-end
+  end
 
--- 添加槽位到扇区
-function M.add_slot_to_sector(config, sector_id, slot)
-    local sector = M.get_sector_by_id(config, sector_id)
-    if not sector then
-        return false, "扇区不存在"
-    end
-    
-    -- 检查槽位数量限制
-    local max_slots = config.menu.max_slots_per_sector or 9
-    if #sector.slots >= max_slots then
-        return false, "扇区槽位已满"
-    end
-    
-    table.insert(sector.slots, slot)
-    return true
-end
-
--- 从扇区删除槽位
-function M.remove_slot_from_sector(config, sector_id, slot_index)
-    local sector = M.get_sector_by_id(config, sector_id)
-    if not sector then
-        return false, "扇区不存在"
-    end
-    
-    if slot_index < 1 or slot_index > #sector.slots then
-        return false, "槽位索引无效"
-    end
-    
-    table.remove(sector.slots, slot_index)
-    return true
+  return true, nil
 end
 
 -- ============================================================================
--- 预设管理函数
+-- 内部：Full config（active_config + presets）读写
 -- ============================================================================
 
--- 加载完整的预设列表
+local function persist_full_config(full_config)
+  local config_path = M.get_config_path()
+  return json.save_to_file(full_config, config_path, true)
+end
+
+local function new_full_config_with_default()
+  local default_config = M.get_default()
+  return {
+    active_config = M.deep_copy_config(default_config),
+    presets = {
+      Default = M.deep_copy_config(default_config),
+    },
+    current_preset_name = "Default",
+  }
+end
+
+-- 加载完整配置结构（包含 presets）
+local function load_full_config()
+  local config_path = M.get_config_path()
+
+  -- File missing → create new
+  local f = io.open(config_path, "r")
+  if not f then
+    local full = new_full_config_with_default()
+    persist_full_config(full)
+    return full
+  end
+  f:close()
+
+  local full_config = json.load_from_file(config_path)
+  if not full_config or type(full_config) ~= "table" then
+    local full = new_full_config_with_default()
+    persist_full_config(full)
+    return full
+  end
+
+  local dirty = false
+
+  -- Old format migration: config.json directly stores config without presets
+  if not full_config.presets then
+    local old_cfg = full_config
+    old_cfg, dirty = normalize_config(old_cfg)
+
+    full_config = {
+      active_config = M.deep_copy_config(old_cfg),
+      presets = {
+        Default = M.deep_copy_config(old_cfg),
+      },
+      current_preset_name = "Default",
+    }
+
+    dirty = true
+  end
+
+  -- Ensure wrapper fields
+  if type(full_config.presets) ~= "table" then
+    full_config.presets = {}
+    dirty = true
+  end
+
+  if type(full_config.current_preset_name) ~= "string" or full_config.current_preset_name == "" then
+    full_config.current_preset_name = "Default"
+    dirty = true
+  end
+
+  -- Ensure Default preset exists
+  if not full_config.presets.Default or type(full_config.presets.Default) ~= "table" then
+    full_config.presets.Default = M.get_default()
+    dirty = true
+  else
+    local normalized, changed = normalize_config(full_config.presets.Default)
+    full_config.presets.Default = normalized
+    if changed then dirty = true end
+  end
+
+  -- Normalize all presets
+  for name, preset_cfg in pairs(full_config.presets) do
+    if type(preset_cfg) ~= "table" then
+      full_config.presets[name] = M.get_default()
+      dirty = true
+    else
+      local normalized, changed = normalize_config(preset_cfg)
+      full_config.presets[name] = normalized
+      if changed then dirty = true end
+    end
+  end
+
+  -- Ensure current preset exists
+  if not full_config.presets[full_config.current_preset_name] then
+    full_config.current_preset_name = "Default"
+    dirty = true
+  end
+
+  -- Ensure active_config
+  if not full_config.active_config or type(full_config.active_config) ~= "table" then
+    full_config.active_config = M.deep_copy_config(full_config.presets[full_config.current_preset_name])
+    dirty = true
+  else
+    local normalized, changed = normalize_config(full_config.active_config)
+    full_config.active_config = normalized
+    if changed then dirty = true end
+  end
+
+  -- Save silently if we had to补全/迁移
+  if dirty then
+    persist_full_config(full_config)
+  end
+
+  return full_config
+end
+
+-- ============================================================================
+-- 对外：load/save
+-- ============================================================================
+
+function M.load()
+  local full_config = load_full_config()
+  return full_config.active_config
+end
+
+function M.save(config)
+  -- Normalize before validate so version/fields are present
+  local normalized = M.merge_with_defaults(config)
+
+  local is_valid, error_msg = M.validate(normalized)
+  if not is_valid then
+    reaper.ShowMessageBox("配置验证失败: " .. error_msg, "错误", 0)
+    return false
+  end
+
+  local full_config = load_full_config()
+
+  full_config.active_config = normalized
+
+  local current_preset_name = full_config.current_preset_name or "Default"
+  if full_config.presets and full_config.presets[current_preset_name] then
+    full_config.presets[current_preset_name] = M.deep_copy_config(normalized)
+  end
+
+  local success, err = persist_full_config(full_config)
+  if not success then
+    reaper.ShowMessageBox("配置保存失败: " .. (err or "未知错误"), "错误", 0)
+    return false
+  end
+
+  -- 发出配置更新信号，通知运行中的轮盘重新加载配置
+  reaper.SetExtState("RadialMenu", "ConfigUpdated", tostring(os.time()), false)
+
+  return true
+end
+
+-- ============================================================================
+-- Preset System 2.0
+-- ============================================================================
+
+-- A) Return a clean config template (does NOT save)
+function M.create_blank_config()
+  local cfg = M.get_default()
+
+  -- Reset to 1 sector, 12 empty slots
+  local slots = {}
+  for _ = 1, 12 do
+    table.insert(slots, { type = "empty" })
+  end
+
+  local default_sector_color = (DEFAULTS.sectors and DEFAULTS.sectors[1] and DEFAULTS.sectors[1].color) or { 70, 130, 180, 200 }
+  local default_sector_icon = (DEFAULTS.sectors and DEFAULTS.sectors[1] and DEFAULTS.sectors[1].icon) or ""
+
+  cfg.sectors = {
+    {
+      id = 1,
+      name = "Main",
+      icon = default_sector_icon,
+      color = M.deep_copy_config(default_sector_color),
+      slots = slots,
+    },
+  }
+
+  return cfg
+end
+
+-- B) Rename an existing preset key (persists to config.json)
+function M.rename_preset(old_name, new_name)
+  if not old_name or old_name == "" then
+    return false, "旧预设名称不能为空"
+  end
+  if not new_name or new_name == "" then
+    return false, "新预设名称不能为空"
+  end
+
+  if old_name == "Default" then
+    return false, "不能重命名默认预设"
+  end
+
+  local full_config = load_full_config()
+  full_config.presets = full_config.presets or {}
+
+  if not full_config.presets[old_name] then
+    return false, "预设不存在"
+  end
+
+  if full_config.presets[new_name] then
+    return false, "目标名称已存在，已阻止覆盖"
+  end
+
+  full_config.presets[new_name] = full_config.presets[old_name]
+  full_config.presets[old_name] = nil
+
+  if full_config.current_preset_name == old_name then
+    full_config.current_preset_name = new_name
+  end
+
+  local success, err = persist_full_config(full_config)
+  if not success then
+    return false, "保存失败: " .. (err or "未知错误")
+  end
+
+  return true
+end
+
+-- C) Optional helper: deep copy config for duplication workflows
+function M.duplicate_preset(source_config)
+  local cfg = M.deep_copy_config(source_config or {})
+  cfg, _ = normalize_config(cfg)
+  return cfg
+end
+
+-- ============================================================================
+-- 预设管理（兼容旧 API）
+-- ============================================================================
+
 function M.load_presets()
-    local full_config = load_full_config()
-    return full_config.presets or {}
+  local full_config = load_full_config()
+  return full_config.presets or {}
 end
 
--- 保存预设
--- @param name string: 预设名称
--- @param config_data table: 配置数据
 function M.save_preset(name, config_data)
-    if not name or name == "" then
-        return false, "预设名称不能为空"
-    end
-    
-    -- 验证配置
-    local is_valid, error_msg = M.validate(config_data)
-    if not is_valid then
-        return false, "配置验证失败: " .. error_msg
-    end
-    
-    local config_path = M.get_config_path()
-    local full_config = load_full_config()
-    
-    -- 确保 presets 表存在
-    if not full_config.presets then
-        full_config.presets = {}
-    end
-    
-    -- 保存预设（深拷贝）
-    full_config.presets[name] = M.deep_copy_config(config_data)
-    
-    -- 保存到文件
-    local success, err = json.save_to_file(full_config, config_path, true)
-    if not success then
-        return false, "保存失败: " .. (err or "未知错误")
-    end
-    
-    return true
+  if not name or name == "" then
+    return false, "预设名称不能为空"
+  end
+
+  local cfg = M.merge_with_defaults(config_data)
+  local is_valid, error_msg = M.validate(cfg)
+  if not is_valid then
+    return false, "配置验证失败: " .. error_msg
+  end
+
+  local full_config = load_full_config()
+  full_config.presets = full_config.presets or {}
+
+  full_config.presets[name] = M.deep_copy_config(cfg)
+
+  local success, err = persist_full_config(full_config)
+  if not success then
+    return false, "保存失败: " .. (err or "未知错误")
+  end
+
+  return true
 end
 
--- 删除预设
--- @param name string: 预设名称
 function M.delete_preset(name)
-    if not name or name == "" then
-        return false, "预设名称不能为空"
-    end
-    
-    -- 禁止删除 Default 预设
-    if name == "Default" then
-        return false, "不能删除默认预设"
-    end
-    
-    local config_path = M.get_config_path()
-    local full_config = load_full_config()
-    
-    -- 检查预设是否存在
-    if not full_config.presets or not full_config.presets[name] then
-        return false, "预设不存在"
-    end
-    
-    -- 删除预设
-    full_config.presets[name] = nil
-    
-    -- 如果删除的是当前预设，切换到 Default
-    if full_config.current_preset_name == name then
-        full_config.current_preset_name = "Default"
-        if full_config.presets.Default then
-            full_config.active_config = M.deep_copy_config(full_config.presets.Default)
-        end
-    end
-    
-    -- 保存到文件
-    local success, err = json.save_to_file(full_config, config_path, true)
-    if not success then
-        return false, "保存失败: " .. (err or "未知错误")
-    end
-    
-    return true
+  if not name or name == "" then
+    return false, "预设名称不能为空"
+  end
+
+  if name == "Default" then
+    return false, "不能删除默认预设"
+  end
+
+  local full_config = load_full_config()
+
+  if not full_config.presets or not full_config.presets[name] then
+    return false, "预设不存在"
+  end
+
+  full_config.presets[name] = nil
+
+  if full_config.current_preset_name == name then
+    full_config.current_preset_name = "Default"
+    full_config.active_config = M.deep_copy_config(full_config.presets.Default)
+  end
+
+  local success, err = persist_full_config(full_config)
+  if not success then
+    return false, "保存失败: " .. (err or "未知错误")
+  end
+
+  return true
 end
 
--- 应用预设
--- @param name string: 预设名称
 function M.apply_preset(name)
-    if not name or name == "" then
-        return nil, "预设名称不能为空"
-    end
-    
-    local config_path = M.get_config_path()
-    local full_config = load_full_config()
-    
-    -- 检查预设是否存在
-    if not full_config.presets or not full_config.presets[name] then
-        return nil, "预设不存在"
-    end
-    
-    -- 应用预设到 active_config
-    local preset_config = full_config.presets[name]
-    full_config.active_config = M.deep_copy_config(preset_config)
-    full_config.current_preset_name = name
-    
-    -- 保存到文件
-    local success, err = json.save_to_file(full_config, config_path, true)
-    if not success then
-        return nil, "保存失败: " .. (err or "未知错误")
-    end
-    
-    -- 发出配置更新信号
-    reaper.SetExtState("RadialMenu", "ConfigUpdated", tostring(os.time()), false)
-    
-    return full_config.active_config
+  if not name or name == "" then
+    return nil, "预设名称不能为空"
+  end
+
+  local full_config = load_full_config()
+
+  if not full_config.presets or not full_config.presets[name] then
+    return nil, "预设不存在"
+  end
+
+  full_config.active_config = M.deep_copy_config(full_config.presets[name])
+  full_config.current_preset_name = name
+
+  local success, err = persist_full_config(full_config)
+  if not success then
+    return nil, "保存失败: " .. (err or "未知错误")
+  end
+
+  reaper.SetExtState("RadialMenu", "ConfigUpdated", tostring(os.time()), false)
+
+  return full_config.active_config
 end
 
--- 获取预设列表（返回名称数组）
 function M.get_preset_list()
-    local presets = M.load_presets()
-    local preset_names = {}
-    
-    for name, _ in pairs(presets) do
-        table.insert(preset_names, name)
-    end
-    
-    -- 排序（Default 排在第一位）
-    table.sort(preset_names, function(a, b)
-        if a == "Default" then return true end
-        if b == "Default" then return false end
-        return a < b
-    end)
-    
-    return preset_names
+  local presets = M.load_presets()
+  local names = {}
+  for name, _ in pairs(presets) do
+    table.insert(names, name)
+  end
+
+  table.sort(names, function(a, b)
+    if a == "Default" then return true end
+    if b == "Default" then return false end
+    return a < b
+  end)
+
+  return names
 end
 
--- 获取当前预设名称
 function M.get_current_preset_name()
-    local full_config = load_full_config()
-    return full_config.current_preset_name or "Default"
+  local full_config = load_full_config()
+  return full_config.current_preset_name or "Default"
 end
 
--- 设置当前预设名称
 function M.set_current_preset_name(name)
-    if not name or name == "" then
-        return false, "预设名称不能为空"
-    end
-    
-    local config_path = M.get_config_path()
-    local full_config = load_full_config()
-    
-    -- 检查预设是否存在
-    if not full_config.presets or not full_config.presets[name] then
-        return false, "预设不存在"
-    end
-    
-    full_config.current_preset_name = name
-    
-    -- 保存到文件
-    local success, err = json.save_to_file(full_config, config_path, true)
-    if not success then
-        return false, "保存失败: " .. (err or "未知错误")
-    end
-    
-    return true
+  if not name or name == "" then
+    return false, "预设名称不能为空"
+  end
+
+  local full_config = load_full_config()
+
+  if not full_config.presets or not full_config.presets[name] then
+    return false, "预设不存在"
+  end
+
+  full_config.current_preset_name = name
+
+  local success, err = persist_full_config(full_config)
+  if not success then
+    return false, "保存失败: " .. (err or "未知错误")
+  end
+
+  return true
 end
 
--- 深拷贝配置（用于预设管理）
-function M.deep_copy_config(src)
-    if type(src) ~= "table" then
-        return src
+-- ============================================================================
+-- 其它工具函数（供 GUI/运行时使用）
+-- ============================================================================
+
+function M.reset_to_default()
+  local default_config = M.get_default()
+  M.save(default_config)
+  return default_config
+end
+
+function M.get_sector_count(config)
+  return config and config.sectors and #config.sectors or 0
+end
+
+function M.get_sector_by_id(config, sector_id)
+  if not config or not config.sectors then
+    return nil
+  end
+
+  for _, sector in ipairs(config.sectors) do
+    if sector.id == sector_id then
+      return sector
     end
-    
-    local dst = {}
-    for key, value in pairs(src) do
-        if type(value) == "table" then
-            dst[key] = M.deep_copy_config(value)
-        else
-            dst[key] = value
-        end
-    end
-    
-    -- 处理数组部分
-    if #src > 0 then
-        for i = 1, #src do
-            if type(src[i]) == "table" then
-                dst[i] = M.deep_copy_config(src[i])
-            else
-                dst[i] = src[i]
-            end
-        end
-    end
-    
-    return dst
+  end
+
+  return nil
+end
+
+function M.add_slot_to_sector(config, sector_id, slot)
+  local sector = M.get_sector_by_id(config, sector_id)
+  if not sector then
+    return false, "扇区不存在"
+  end
+
+  local max_slots = (config and config.menu and config.menu.max_slots_per_sector) or 9
+  if #sector.slots >= max_slots then
+    return false, "扇区槽位已满"
+  end
+
+  table.insert(sector.slots, slot)
+  return true
+end
+
+function M.remove_slot_from_sector(config, sector_id, slot_index)
+  local sector = M.get_sector_by_id(config, sector_id)
+  if not sector then
+    return false, "扇区不存在"
+  end
+
+  if slot_index < 1 or slot_index > #sector.slots then
+    return false, "槽位索引无效"
+  end
+
+  table.remove(sector.slots, slot_index)
+  return true
 end
 
 return M
