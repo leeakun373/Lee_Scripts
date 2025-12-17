@@ -11,7 +11,7 @@ local M = {}
 
 local math_utils = require("math_utils")
 local im_utils = require("im_utils")
-local styles = require("styles")
+local styles = require("gui.styles")
 
 -- ============================================================================
 -- 模块状态变量
@@ -173,11 +173,29 @@ function M.draw(ctx, config, state, callbacks)
         local center_y = py + h / 2
         
         -- [PERF] 生成轻量 key 用于缓存失效检测
-        local key = tostring(config.version or '') .. '|' .. 
-                   tostring(#(config.menu and config.menu.sectors or {})) .. '|' .. 
-                   tostring(config.menu and config.menu.inner_radius or '') .. '|' .. 
-                   tostring(config.menu and config.menu.outer_radius or '') .. '|' .. 
-                   tostring((config.colors and config.colors.wheel_bg) or '')
+        -- NOTE:
+        -- - 这里必须使用 config.sectors（不是 config.menu.sectors），否则增加/减少扇区不会触发缓存刷新。
+        -- - 同时加入一个很便宜的 sectors signature，让扇区名称/颜色变更也能刷新预览文本/颜色。
+        local sectors = config.sectors or {}
+        local sectors_sig = 0
+        for i, s in ipairs(sectors) do
+            -- id / name length
+            sectors_sig = sectors_sig + (tonumber(s.id) or i) * 17
+            local n = s.name or ""
+            sectors_sig = sectors_sig + #tostring(n) * 31
+            -- color components
+            if type(s.color) == "table" then
+                for _, c in ipairs(s.color) do
+                    sectors_sig = sectors_sig + (tonumber(c) or 0)
+                end
+            end
+        end
+        local menu = config.menu or {}
+        local key = tostring(config.version or '') .. '|' ..
+                   tostring(#sectors) .. '|' ..
+                   tostring(menu.inner_radius or '') .. '|' ..
+                   tostring(menu.outer_radius or '') .. '|' ..
+                   tostring(sectors_sig)
         
         -- [PERF] 只有当 key 变化时才重新 deep_copy
         if key ~= vis_cache_key then

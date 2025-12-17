@@ -202,7 +202,7 @@ function M.draw_action_browser(ctx, sector, state)
     reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_Button(), 0x2E7D32FF)
     if reaper.ImGui_Button(ctx, "运行", 0, 0) then
         if selected_browser_action then
-            local execution = require("execution")
+            local execution = require("logic.execution")
             -- Create a temp slot object to reuse execution logic
             local temp_slot = { type = "action", data = { command_id = selected_browser_action.command_id } }
             execution.trigger_slot(temp_slot)
@@ -279,7 +279,7 @@ function M.draw_action_browser(ctx, sector, state)
                             
                             -- Support Double Click to Run
                             if reaper.ImGui_IsMouseDoubleClicked(ctx, 0) then
-                                local execution = require("execution")
+                                local execution = require("logic.execution")
                                 local temp_slot = { type = "action", data = { command_id = action.command_id } }
                                 execution.trigger_slot(temp_slot)
                             end

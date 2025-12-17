@@ -6,10 +6,10 @@
 local M = {}
 
 -- 加载依赖
-local actions = require("actions")
-local styles = require("styles")
+local actions = require("logic.actions")
+local styles = require("gui.styles")
 local math_utils = require("math_utils")
-local execution = require("execution")
+local execution = require("logic.execution")
 
 -- ============================================================================
 -- 配置常量 (3x3 紧凑布局)
@@ -62,12 +62,12 @@ end
 
 function M.draw_submenu(ctx, sector_data, center_x, center_y, anim_scale, config)
     if not sector_data or not config then return false end  -- Return false if no sector data or config
-    
-    anim_scale = anim_scale or 1.0
+
+    -- 子菜单不使用任何淡入/动画（anim_scale 保留参数以兼容旧调用，但不再使用）
     current_sector = sector_data
     
     -- [REVERTED] 移除 Pop 动画。使用固定大小和位置。
-    -- 我们仍然使用 anim_scale 仅用于透明度（Alpha），这是稳定的。
+    -- 这里也不再使用 anim_scale 做背景淡入，以避免性能损耗和不同渲染后端的观感差异。
     
     -- 获取插槽数量
     local slot_count = sector_data.slots and #sector_data.slots or 0
@@ -84,8 +84,8 @@ function M.draw_submenu(ctx, sector_data, center_x, center_y, anim_scale, config
     -- 3. 动态大小（从配置读取）
     reaper.ImGui_SetNextWindowSize(ctx, win_w, win_h, reaper.ImGui_Cond_Always())
     
-    -- 4. 保留透明度淡入（微妙且安全）
-    reaper.ImGui_SetNextWindowBgAlpha(ctx, 0.95 * anim_scale)
+    -- 4. 固定背景透明度（不随动画变化）
+    reaper.ImGui_SetNextWindowBgAlpha(ctx, 0.95)
     
     -- 3. 样式设置 (深色背景容器)
     

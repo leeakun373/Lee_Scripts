@@ -3,7 +3,7 @@
 -- @author Lee
 
 local M = {}
-local execution = require("execution")
+local execution = require("logic.execution")
 
 function M.draw(ctx, slot, index, sector, state)
     -- [已移除] 自动初始化代码。现在只有真正有内容的插槽才会进入这里。

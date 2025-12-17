@@ -8,7 +8,7 @@ local M = {}
 
 local math_utils = require("math_utils")
 local im_utils = require("im_utils")
-local styles = require("styles")
+local styles = require("gui.styles")
 
 local hovered_sector_id = nil
 
