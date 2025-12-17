@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="85d31e50576f7fb8174a7b2b435300e9b6b165ea" name="Lee_Scripts">
+<index version="1" commit="19fd5ef80d9304cb8b6c2ce41d38c4e475d03c7f" name="Lee_Scripts">
   <category name="Items">
     <reapack name="Lee_Items - Bounce Items.lua" type="script" desc="Render each item in place separately">
       <metadata>
@@ -301,6 +301,24 @@
         <source file="utils/json.lua">https://github.com/leeakun373/Lee_Scripts/raw/85d31e50576f7fb8174a7b2b435300e9b6b165ea/RadialMenu_Tool/utils/json.lua</source>
         <source file="utils/math_utils.lua">https://github.com/leeakun373/Lee_Scripts/raw/85d31e50576f7fb8174a7b2b435300e9b6b165ea/RadialMenu_Tool/utils/math_utils.lua</source>
         <source file="utils/utils_fx.lua">https://github.com/leeakun373/Lee_Scripts/raw/85d31e50576f7fb8174a7b2b435300e9b6b165ea/RadialMenu_Tool/utils/utils_fx.lua</source>
+      </version>
+    </reapack>
+  </category>
+  <category name="Shared/Toolbox">
+    <reapack name="Demo_UI.lua" type="script" desc="Toolbox - UI Demo (ReaImGui template)">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 \u20849 ?\u20139 ?\u8220"\u24037 ?\u20855 ?\u31665 ?\u8221"\u20837 ?\u21475 ? Demo\u65288 ?\u29992 ?\u20110 ?\u23398 ?\u20064 ?/\u22797 ?\u29992 ? GUI \u23454 ?\u29616 ?\u36923 ?\u36753 ?\u19982 ?\u36890 ?\u29992 ?\u32452 ?\u20214 ?\u65289 ?\u65306 ?\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab framework/* : \u30382 ?\u32932 ?/\u25511 ?\u20214 ?/\u24067 ?\u23616 ?/\u26085 ?\u24535 ?/\u32456 ?\u31471 ?/\u37197 ?\u32622 ?\u31561 ?\u27169 ?\u22359 ?\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab fonts/ : \u21487 ?\u36873 ?\u23383 ?\u20307 ?\u30446 ?\u24405 ?\sa180\par}
+}
+]]></description>
+      </metadata>
+      <version name="0.2" author="Lee" time="2025-12-17T18:58:58Z">
+        <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/19fd5ef80d9304cb8b6c2ce41d38c4e475d03c7f/Shared/Toolbox/Demo_UI.lua</source>
       </version>
     </reapack>
   </category>
