@@ -1,9 +1,8 @@
 -- @description Lee_FXMiner - Saver
 -- @author Lee
--- @version 1.0.3
+-- @version 1.0.5
 -- @about Save selected track FX Chain into FXChains with shadow DB
 -- @provides
---   [main] .
 --   src/config.lua
 --   src/db.lua
 --   src/fx_engine.lua
@@ -13,7 +12,6 @@
 --   src/widgets.lua
 --   config_fields.json
 --   folders_db.json
---   ../../Shared/Toolbox/framework/*.lua
 
 local r = reaper
 
