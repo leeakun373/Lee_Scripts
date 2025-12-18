@@ -1,6 +1,6 @@
--- @description Lee_FXMiner - Saver
+-- @description Lee FXMiner: Saver
 -- @author Lee
--- @version 1.0.0
+-- @version 1.0.1
 -- @about Save selected track FX Chain into FXChains with shadow DB
 -- @provides
 --   [main] .
@@ -10,6 +10,7 @@
 --   src/gui_browser.lua
 --   src/gui_saver.lua
 --   src/json.lua
+--   src/widgets.lua
 --   config_fields.json
 --   folders_db.json
 --   ../../Shared/Toolbox/framework/*.lua
@@ -120,7 +121,7 @@ local app = App.new(ImGui, {
 app.state.always_on_top = true
 
 local db = DB:new(Config)
-db:load()
+db:ensure_initialized(root)
 
 GuiSaver.init(app, db, FXEngine, Config)
 

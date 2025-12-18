@@ -1,6 +1,6 @@
--- @description Lee_FXMiner - Browser
+-- @description Lee FXMiner: Browser
 -- @author Lee
--- @version 1.0.0
+-- @version 1.0.1
 -- @about Browse/search FXChains via shadow DB
 -- @provides
 --   [main] .
@@ -10,6 +10,7 @@
 --   src/gui_browser.lua
 --   src/gui_saver.lua
 --   src/json.lua
+--   src/widgets.lua
 --   config_fields.json
 --   folders_db.json
 --   ../../Shared/Toolbox/framework/*.lua
@@ -106,34 +107,7 @@ local app = App.new(ImGui, {
 })
 
 local db = DB:new(Config)
-db:load()
-
--- New architecture init:
--- 1) load/create dynamic fields config
-do
-  local ok, err = db:load_fields_config(root)
-  if not ok then
-    r.ShowMessageBox("FXMiner failed to load config_fields.json\n\n" .. tostring(err), "FXMiner", 0)
-    return
-  end
-end
-
--- 2) load/create folders db
-do
-  local ok, err = db:load_folders(root)
-  if not ok then
-    r.ShowMessageBox("FXMiner failed to load folders_db.json\n\n" .. tostring(err), "FXMiner", 0)
-    return
-  end
-end
-
--- 3) scan/prune and migrate entries to new schema
-pcall(function()
-  db:scan_fxchains()
-  db:prune_missing_files()
-  db:load()
-  db:migrate_entries({ save = true })
-end)
+db:ensure_initialized(root)
 
 GuiBrowser.init(app, db, Config)
 

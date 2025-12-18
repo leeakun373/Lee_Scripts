@@ -1612,4 +1612,31 @@ function DB:full_sync(team_path, team_db_path, local_download_dir)
   return pull_ok, msg, pull_stats
 end
 
+-- Initialize environment: ensure directories and files exist
+function DB:ensure_initialized(script_root)
+  -- 1. Ensure data directory exists
+  local data_dir = self:db_dir()
+  if reaper.RecursiveCreateDirectory then
+    reaper.RecursiveCreateDirectory(data_dir, 0)
+  end
+
+  -- 2. Load/initialize fields config
+  self:load_fields_config(script_root)
+
+  -- 3. Load/initialize folders DB
+  self:load_folders(script_root)
+
+  -- 4. Load main entries DB
+  self:load()
+
+  -- 5. Local scan and prune
+  pcall(function()
+    self:scan_fxchains()
+    self:prune_missing_files()
+    self:migrate_entries({ save = true })
+  end)
+  
+  return true
+end
+
 return DB
