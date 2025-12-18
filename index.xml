@@ -1,5 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="19fd5ef80d9304cb8b6c2ce41d38c4e475d03c7f" name="Lee_Scripts">
+<index version="1" commit="e1bfb266e83a8cedf5a13ed4b16e099b02a01b52" name="Lee_Scripts">
+  <category name="FX/FXMiner">
+    <reapack name="Lee_FXMiner - Browser.lua" type="script" desc="Lee_FXMiner - Browser">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Browse/search FXChains via shadow DB\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.0.0" author="Lee" time="2025-12-18T20:02:12Z">
+        <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/e1bfb266e83a8cedf5a13ed4b16e099b02a01b52/FX/FXMiner/Lee_FXMiner%20-%20Browser.lua</source>
+        <source file="src/config.lua">https://github.com/leeakun373/Lee_Scripts/raw/e1bfb266e83a8cedf5a13ed4b16e099b02a01b52/FX/FXMiner/src/config.lua</source>
+        <source file="src/db.lua">https://github.com/leeakun373/Lee_Scripts/raw/e1bfb266e83a8cedf5a13ed4b16e099b02a01b52/FX/FXMiner/src/db.lua</source>
+        <source file="src/fx_engine.lua">https://github.com/leeakun373/Lee_Scripts/raw/e1bfb266e83a8cedf5a13ed4b16e099b02a01b52/FX/FXMiner/src/fx_engine.lua</source>
+        <source file="src/gui_browser.lua">https://github.com/leeakun373/Lee_Scripts/raw/e1bfb266e83a8cedf5a13ed4b16e099b02a01b52/FX/FXMiner/src/gui_browser.lua</source>
+        <source file="src/gui_saver.lua">https://github.com/leeakun373/Lee_Scripts/raw/e1bfb266e83a8cedf5a13ed4b16e099b02a01b52/FX/FXMiner/src/gui_saver.lua</source>
+        <source file="src/json.lua">https://github.com/leeakun373/Lee_Scripts/raw/e1bfb266e83a8cedf5a13ed4b16e099b02a01b52/FX/FXMiner/src/json.lua</source>
+        <source file="config_fields.json">https://github.com/leeakun373/Lee_Scripts/raw/e1bfb266e83a8cedf5a13ed4b16e099b02a01b52/FX/FXMiner/config_fields.json</source>
+        <source file="folders_db.json">https://github.com/leeakun373/Lee_Scripts/raw/e1bfb266e83a8cedf5a13ed4b16e099b02a01b52/FX/FXMiner/folders_db.json</source>
+        <source file="../../Shared/Toolbox/framework/app.lua">https://github.com/leeakun373/Lee_Scripts/raw/e1bfb266e83a8cedf5a13ed4b16e099b02a01b52/Shared/Toolbox/framework/app.lua</source>
+        <source file="../../Shared/Toolbox/framework/app_state.lua">https://github.com/leeakun373/Lee_Scripts/raw/e1bfb266e83a8cedf5a13ed4b16e099b02a01b52/Shared/Toolbox/framework/app_state.lua</source>
+        <source file="../../Shared/Toolbox/framework/bootstrap.lua">https://github.com/leeakun373/Lee_Scripts/raw/e1bfb266e83a8cedf5a13ed4b16e099b02a01b52/Shared/Toolbox/framework/bootstrap.lua</source>
+        <source file="../../Shared/Toolbox/framework/config.lua">https://github.com/leeakun373/Lee_Scripts/raw/e1bfb266e83a8cedf5a13ed4b16e099b02a01b52/Shared/Toolbox/framework/config.lua</source>
+        <source file="../../Shared/Toolbox/framework/dock.lua">https://github.com/leeakun373/Lee_Scripts/raw/e1bfb266e83a8cedf5a13ed4b16e099b02a01b52/Shared/Toolbox/framework/dock.lua</source>
+        <source file="../../Shared/Toolbox/framework/editors.lua">https://github.com/leeakun373/Lee_Scripts/raw/e1bfb266e83a8cedf5a13ed4b16e099b02a01b52/Shared/Toolbox/framework/editors.lua</source>
+        <source file="../../Shared/Toolbox/framework/icon_bar.lua">https://github.com/leeakun373/Lee_Scripts/raw/e1bfb266e83a8cedf5a13ed4b16e099b02a01b52/Shared/Toolbox/framework/icon_bar.lua</source>
+        <source file="../../Shared/Toolbox/framework/log.lua">https://github.com/leeakun373/Lee_Scripts/raw/e1bfb266e83a8cedf5a13ed4b16e099b02a01b52/Shared/Toolbox/framework/log.lua</source>
+        <source file="../../Shared/Toolbox/framework/terminal.lua">https://github.com/leeakun373/Lee_Scripts/raw/e1bfb266e83a8cedf5a13ed4b16e099b02a01b52/Shared/Toolbox/framework/terminal.lua</source>
+        <source file="../../Shared/Toolbox/framework/ui_colors.lua">https://github.com/leeakun373/Lee_Scripts/raw/e1bfb266e83a8cedf5a13ed4b16e099b02a01b52/Shared/Toolbox/framework/ui_colors.lua</source>
+        <source file="../../Shared/Toolbox/framework/ui_font.lua">https://github.com/leeakun373/Lee_Scripts/raw/e1bfb266e83a8cedf5a13ed4b16e099b02a01b52/Shared/Toolbox/framework/ui_font.lua</source>
+        <source file="../../Shared/Toolbox/framework/ui_style.lua">https://github.com/leeakun373/Lee_Scripts/raw/e1bfb266e83a8cedf5a13ed4b16e099b02a01b52/Shared/Toolbox/framework/ui_style.lua</source>
+        <source file="../../Shared/Toolbox/framework/ui_theme.lua">https://github.com/leeakun373/Lee_Scripts/raw/e1bfb266e83a8cedf5a13ed4b16e099b02a01b52/Shared/Toolbox/framework/ui_theme.lua</source>
+        <source file="../../Shared/Toolbox/framework/util.lua">https://github.com/leeakun373/Lee_Scripts/raw/e1bfb266e83a8cedf5a13ed4b16e099b02a01b52/Shared/Toolbox/framework/util.lua</source>
+        <source file="../../Shared/Toolbox/framework/widgets.lua">https://github.com/leeakun373/Lee_Scripts/raw/e1bfb266e83a8cedf5a13ed4b16e099b02a01b52/Shared/Toolbox/framework/widgets.lua</source>
+      </version>
+    </reapack>
+  </category>
   <category name="Items">
     <reapack name="Lee_Items - Bounce Items.lua" type="script" desc="Render each item in place separately">
       <metadata>
