@@ -1,0 +1,80 @@
+# FXMiner 项目规格说明书
+
+## 1. 项目概述 (Overview)
+
+FXMiner 是一个基于 REAPER 的非侵入式 FX Chain（效果链）管理系统。旨在为音频设计师提供类似 SoundMiner 的“元数据检索”体验，同时保持本地文件系统的纯净与整洁。
+
+**核心理念：**
+
+- **非侵入式 (Non-Intrusive):** 绝不强制改变用户现有的文件夹结构。
+- **虚拟化管理 (Virtual Management):** 通过元数据（Tags, Description）进行管理，而非物理移动文件。
+- **便携性 (Portability):** 数据库支持相对路径，允许整个库在不同电脑间无缝迁移。
+- **企业级同步 (Sync):** 采用 "Push/Pull" 模式，支持本地私有库与公司共享库的协同。
+
+## 2. 系统架构 (Architecture)
+
+### 2.1 物理存储结构
+
+所有核心数据均存储在 REAPER 资源目录的 `FXChains` 文件夹下的特定子目录中，利用文件系统的相对位置保证便携性。
+
+```
+.../Reaper/FXChains/
+    ├── _FXMiner_Data/              <-- [核心数据仓] (Reaper中可见，但置顶/置底)
+    │     ├── FXMiner_Local_DB.json <-- [主数据库] 存储本地文件的索引与Tag
+    │     └── remote_cache.json     <-- [缓存库] 存储从公司盘拉取文件的索引
+    │
+    ├── My_Personal_Lib/            <-- [用户文件] 用户原本的文件夹，保持原样
+    │     ├── Kick_Design.RfxChain
+    │     └── ...
+    │
+    └── Company_Pulls/              <-- [拉取文件] 从公司库下载的文件
+          └── Monster_Voice.RfxChain
+
+```
+
+### 2.2 数据索引逻辑 (Shadow Index)
+
+- **ID 生成：** 使用文件相对于 `_FXMiner_Data` 文件夹的 **相对路径** 作为唯一 Key。
+    - *例如：* `../My_Personal_Lib/Kick.RfxChain`
+- **绝对路径还原：** 运行时，脚本通过 `DB目录绝对路径` + `相对路径 Key` 拼算出文件的真实位置。
+
+### 2.3 远程同步策略 (Sidecar)
+
+- **本地 (Local):** 使用 **集中式数据库 (Central DB)**，保持文件夹干净，不生成 `.json` 小文件。
+- **远程 (Remote/Network):** 使用 **伴生文件 (Sidecar JSON)**。
+    - 当用户执行 "Publish" 时，脚本将 `.RfxChain` 和 `.json` 同时复制到网络共享盘。
+    - *理由：* 网络盘文件常被单独拷贝，Sidecar 模式最健壮，不易丢失元数据。
+
+## 3. 模块划分 (Modules)
+
+### A. 核心层 (Core)
+
+- **src/config.lua:** 定义常量、路径算法、默认配置。
+- **src/db.lua:** 负责 JSON 读写、相对路径计算、数据库缓存管理。
+- **src/fx_engine.lua:** 封装 SWS 功能，负责从 Track 获取 Chain 数据，生成 `.RfxChain` 文件。
+
+### B. 业务层 (Business)
+
+- **FXMiner_Saver.lua (入库端):**
+    - **形态：** 模态浮窗 (Modal Popup)。
+    - **功能：** 获取当前 Chain -> 输入 Metadata -> 写入本地文件 -> 更新 DB -> (可选) 发布到远程。
+    - **特性：** 保存后触发 DB 更新事件，通知 Browser 刷新。
+- **FXMiner_Browser.lua (检索端):**
+    - **形态：** 可停靠窗口 (Dockable)。
+    - **功能：** 监听 DB 变化 -> 展示列表 -> 搜索/过滤 -> 加载 Chain 到轨道。
+    - **特性：** 内置 "Delete" (仅删索引) 和 "Trashing" (物理删除) 功能。
+
+## 4. 开发计划 (Milestones)
+
+- **Phase 1: 基础设施 (Current)**
+    - 建立 `config.lua` 和 `db.lua`。
+    - 实现 JSON 读写与相对路径算法。
+- **Phase 2: 入库工具 (Saver)**
+    - 实现 `fx_engine.lua` (SWS 集成)。
+    - 开发 Saver UI，实现“保存到本地并注册到 DB”的闭环。
+- **Phase 3: 检索工具 (Browser)**
+    - 开发 Browser UI，实现虚拟列表展示。
+    - 实现加载功能。
+- **Phase 4: 同步与完善**
+    - 实现 Publish (发布到网络) 功能。
+    - 实现 Pull (从网络拉取) 功能。
