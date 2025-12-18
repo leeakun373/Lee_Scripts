@@ -1,6 +1,6 @@
--- @description Lee FXMiner: Browser
+-- @description Lee FXMiner - Browser
 -- @author Lee
--- @version 1.0.1
+-- @version 1.0.2
 -- @about Browse/search FXChains via shadow DB
 -- @provides
 --   [main] .
