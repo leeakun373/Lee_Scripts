@@ -1,30 +1,8 @@
 -- @description Lee_FXMiner - Saver
 -- @author Lee
--- @version 1.0.6
+-- @version 1.0.7
 -- @about Save selected track FX Chain into FXChains with shadow DB
--- @provides
---   src/config.lua
---   src/db/db.lua
---   src/db/db_core.lua
---   src/db/db_entries.lua
---   src/db/db_fields.lua
---   src/db/db_folders.lua
---   src/db/db_team_sync.lua
---   src/db/db_utils.lua
---   src/fx_engine.lua
---   src/gui_browser.lua
---   src/gui_browser/gui_delete_dialog.lua
---   src/gui_browser/gui_folders.lua
---   src/gui_browser/gui_inspector.lua
---   src/gui_browser/gui_list.lua
---   src/gui_browser/gui_settings.lua
---   src/gui_browser/gui_state.lua
---   src/gui_browser/gui_topbar.lua
---   src/gui_browser/gui_utils.lua
---   src/gui_saver.lua
---   src/json.lua
---   config_fields.json
---   folders_db.json
+-- @noindex
 
 local r = reaper
 
