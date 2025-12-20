@@ -1,31 +1,16 @@
 -- @description Lee_FXMiner - Browser
 -- @author Lee
--- @version 1.0.7
+-- @version 1.0.8
 -- @about Browse/search FXChains via shadow DB
 -- @provides
 --   [main] Lee_FXMiner - Saver.lua
---   src/config.lua
---   src/db/db.lua
---   src/db/db_core.lua
---   src/db/db_entries.lua
---   src/db/db_fields.lua
---   src/db/db_folders.lua
---   src/db/db_team_sync.lua
---   src/db/db_utils.lua
---   src/fx_engine.lua
---   src/gui_browser.lua
---   src/gui_browser/gui_delete_dialog.lua
---   src/gui_browser/gui_folders.lua
---   src/gui_browser/gui_inspector.lua
---   src/gui_browser/gui_list.lua
---   src/gui_browser/gui_settings.lua
---   src/gui_browser/gui_state.lua
---   src/gui_browser/gui_topbar.lua
---   src/gui_browser/gui_utils.lua
---   src/gui_saver.lua
---   src/json.lua
+--   src/*.lua
+--   src/db/*.lua
+--   src/gui_browser/*.lua
 --   config_fields.json
 --   folders_db.json
+--   ../../Shared/Toolbox/framework/*.lua
+--   ../../Shared/Toolbox/fonts/*.txt
 
 local r = reaper
 
