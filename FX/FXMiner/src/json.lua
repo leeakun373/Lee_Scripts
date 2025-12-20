@@ -155,6 +155,13 @@ end
 -- Main encode function
 function M.encode(value, indent)
     local buffer = {}
+    -- Ensure indent is a string if provided (for pretty printing)
+    if indent == true then
+        indent = "  "  -- Default to 2 spaces if true
+    elseif indent == false or indent == nil then
+        indent = nil
+    end
+    -- indent should be a string like "  " or nil
     encode_value(value, indent, 0, buffer)
     return table.concat(buffer)
 end

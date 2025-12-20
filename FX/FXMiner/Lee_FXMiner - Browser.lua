@@ -1,15 +1,28 @@
 -- @description Lee_FXMiner - Browser
 -- @author Lee
--- @version 1.0.5
+-- @version 1.0.6
 -- @about Browse/search FXChains via shadow DB
 -- @provides
 --   src/config.lua
---   src/db.lua
+--   src/db/db.lua
+--   src/db/db_core.lua
+--   src/db/db_entries.lua
+--   src/db/db_fields.lua
+--   src/db/db_folders.lua
+--   src/db/db_team_sync.lua
+--   src/db/db_utils.lua
 --   src/fx_engine.lua
 --   src/gui_browser.lua
+--   src/gui_browser/gui_delete_dialog.lua
+--   src/gui_browser/gui_folders.lua
+--   src/gui_browser/gui_inspector.lua
+--   src/gui_browser/gui_list.lua
+--   src/gui_browser/gui_settings.lua
+--   src/gui_browser/gui_state.lua
+--   src/gui_browser/gui_topbar.lua
+--   src/gui_browser/gui_utils.lua
 --   src/gui_saver.lua
 --   src/json.lua
---   src/widgets.lua
 --   config_fields.json
 --   folders_db.json
 
@@ -95,7 +108,7 @@ local App = app_mod.App
 
 -- IMPORTANT: avoid conflict with Toolbox's framework/config.lua
 local Config = safe_loadfile(path_join(path_join(root, "src"), "config.lua"), "FXMiner/src/config.lua")
-local DB = safe_require("db")
+local DB = safe_require("db.db")  -- 直接使用模块化版本
 local GuiBrowser = safe_require("gui_browser")
 if not Config or not DB or not GuiBrowser then return end
 

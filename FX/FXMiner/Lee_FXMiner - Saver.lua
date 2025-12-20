@@ -1,15 +1,28 @@
 -- @description Lee_FXMiner - Saver
 -- @author Lee
--- @version 1.0.5
+-- @version 1.0.6
 -- @about Save selected track FX Chain into FXChains with shadow DB
 -- @provides
 --   src/config.lua
---   src/db.lua
+--   src/db/db.lua
+--   src/db/db_core.lua
+--   src/db/db_entries.lua
+--   src/db/db_fields.lua
+--   src/db/db_folders.lua
+--   src/db/db_team_sync.lua
+--   src/db/db_utils.lua
 --   src/fx_engine.lua
 --   src/gui_browser.lua
+--   src/gui_browser/gui_delete_dialog.lua
+--   src/gui_browser/gui_folders.lua
+--   src/gui_browser/gui_inspector.lua
+--   src/gui_browser/gui_list.lua
+--   src/gui_browser/gui_settings.lua
+--   src/gui_browser/gui_state.lua
+--   src/gui_browser/gui_topbar.lua
+--   src/gui_browser/gui_utils.lua
 --   src/gui_saver.lua
 --   src/json.lua
---   src/widgets.lua
 --   config_fields.json
 --   folders_db.json
 
@@ -105,7 +118,7 @@ local App = app_mod.App
 -- Toolbox 的 app_state 会先 require("config")（Toolbox 的 config.lua），导致模块名冲突。
 -- 这里改用 loadfile 直接加载 FXMiner 自己的 src/config.lua，绕开 require 缓存冲突。
 local Config = safe_loadfile(path_join(path_join(root, "src"), "config.lua"), "FXMiner/src/config.lua")
-local DB = safe_require("db")
+local DB = safe_require("db.db")  -- 直接使用模块化版本
 local FXEngine = safe_require("fx_engine")
 local GuiSaver = safe_require("gui_saver")
 if not Config or not DB or not FXEngine or not GuiSaver then return end

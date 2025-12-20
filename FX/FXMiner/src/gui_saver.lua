@@ -7,6 +7,27 @@ local GuiSaver = {}
 
 local App, DB, Engine, Config
 
+-- Debug logging system
+local debug_logs = {}
+local MAX_LOG_LINES = 100
+
+local function log_debug(msg)
+  local r = reaper
+  -- Output to Reaper console if available
+  if r and r.ShowConsoleMsg then
+    r.ShowConsoleMsg("[FXMiner Saver] " .. tostring(msg) .. "\n")
+  end
+  
+  -- Also store in debug_logs for UI display
+  local timestamp = os.date("%H:%M:%S")
+  table.insert(debug_logs, timestamp .. " | " .. tostring(msg))
+  
+  -- Keep only last MAX_LOG_LINES
+  if #debug_logs > MAX_LOG_LINES then
+    table.remove(debug_logs, 1)
+  end
+end
+
 local state = {
   name = "",
   -- Physical folder (on disk)
@@ -22,6 +43,8 @@ local state = {
   publish_to_team = false,
   -- Status message
   status = "",
+  -- Debug console
+  show_debug_console = true,  -- Show by default
 
   -- Publish conflict modal state
   show_conflict_modal = false,
@@ -102,11 +125,53 @@ local function build_virtual_folder_list()
   return out
 end
 
+-- Load user config (same logic as Browser)
+local function load_user_config(Config)
+  if not Config or not Config.DATA_DIR_PATH then return end
+  
+  local json = require("json")
+  local sep = Config.PATH_SEP or package.config:sub(1, 1)
+  local config_path = Config.DATA_DIR_PATH .. sep .. "user_config.json"
+  
+  local f = io.open(config_path, "r")
+  if not f then 
+    log_debug("User config file not found: " .. tostring(config_path))
+    return 
+  end
+  
+  local content = f:read("*all")
+  f:close()
+  
+  if not content or content == "" then 
+    log_debug("User config file is empty")
+    return 
+  end
+  
+  local ok, data = pcall(function() return json.decode(content) end)
+  if ok and type(data) == "table" then
+    -- Load team publish path
+    if data.team_publish_path and data.team_publish_path ~= "" then
+      log_debug("Loading user config: team_publish_path = " .. tostring(data.team_publish_path))
+      Config.TEAM_PUBLISH_PATH = data.team_publish_path
+      -- IMPORTANT: Clear TEAM_DB_PATH so get_team_db_path() will derive it from TEAM_PUBLISH_PATH
+      Config.TEAM_DB_PATH = ""
+    else
+      log_debug("User config found but team_publish_path is empty")
+    end
+  else
+    log_debug("Failed to parse user config: " .. tostring(data))
+  end
+end
+
 function GuiSaver.init(app_ctx, db_instance, fx_engine, cfg)
   App = app_ctx
   DB = db_instance
   Engine = fx_engine
   Config = cfg
+
+  -- Load user config FIRST (before using Config values)
+  load_user_config(Config)
+  log_debug("Config loaded - TEAM_PUBLISH_PATH: " .. tostring(Config.TEAM_PUBLISH_PATH))
 
   state.name = Engine.get_selected_track_name() or "Untitled Chain"
   state.disk_folder_list = build_disk_folder_list()
@@ -116,9 +181,14 @@ function GuiSaver.init(app_ctx, db_instance, fx_engine, cfg)
   state.description = ""
   state.publish_to_team = false
   state.status = ""
+  state.show_debug_console = true  -- Show console by default
 
   -- Reset conflict modal state
   state.show_conflict_modal = false
+  
+  -- Clear debug logs on init
+  debug_logs = {}
+  log_debug("FXMiner Saver initialized")
   state.conflict_target_path = nil
   state.conflict_source_path = nil
   state.conflict_filename = nil
@@ -130,23 +200,32 @@ end
 local function do_publish_to_team(source_path, metadata, opts)
   opts = opts or {}
   
-  -- [DEBUG] 开始：打印配置路径
   local team_path = Config.TEAM_PUBLISH_PATH
-  -- 这里加了双保险：如果函数不存在，直接读变量
   local team_db_path = (Config.get_team_db_path and Config.get_team_db_path()) or Config.TEAM_DB_PATH
   
   if not team_path or team_path == "" then 
-    return false, "Config Error: Path missing" 
+    return false, "Team path not configured. Please set it in Browser Settings." 
   end
   if not team_db_path or team_db_path == "" then 
-    return false, "Config Error: DB Path missing" 
+    return false, "Team DB path not configured" 
   end
+
+  -- Verify source file exists
+  local source_f = io.open(source_path, "r")
+  if not source_f then
+    return false, "Source file not found: " .. tostring(source_path)
+  end
+  source_f:close()
 
   -- Step 1: 物理文件复制
   local result, msg, published_path = Engine.publish_to_team(Config, source_path, opts)
 
   if result == Engine.PUBLISH_ERROR then
-    return false, msg
+    -- Add more context to error message
+    local error_detail = "File copy failed: " .. tostring(msg)
+    error_detail = error_detail .. "\nTeam path: " .. tostring(team_path)
+    error_detail = error_detail .. "\nSource: " .. tostring(source_path)
+    return false, error_detail
   end
 
   if result == Engine.PUBLISH_EXISTS and not opts.force_overwrite and not opts.auto_rename then
@@ -158,7 +237,26 @@ local function do_publish_to_team(source_path, metadata, opts)
     return nil, "conflict" 
   end
   
+  -- Verify file was actually copied (if published_path is provided)
+  if published_path then
+    log_debug("Verifying file copy at: " .. tostring(published_path))
+    local target_f = io.open(published_path, "r")
+    if not target_f then
+      log_debug("ERROR: File copy verification failed - file not found")
+      return false, "File copy verification failed: File not found at " .. tostring(published_path)
+    end
+    target_f:close()
+    log_debug("File copy verified successfully")
+  else
+    log_debug("WARNING: published_path is nil, skipping verification")
+  end
+  
   -- Step 2: 数据库同步 (带锁)
+  log_debug("Calling DB:push_to_team_locked...")
+  log_debug("  team_path: " .. tostring(team_path))
+  log_debug("  team_db_path: " .. tostring(team_db_path))
+  log_debug("  published_path: " .. tostring(published_path or source_path))
+  
   local sync_ok, sync_err = DB:push_to_team_locked(
       team_path,       
       team_db_path,    
@@ -166,10 +264,14 @@ local function do_publish_to_team(source_path, metadata, opts)
       metadata         
   )
 
+  log_debug("DB:push_to_team_locked returned: ok=" .. tostring(sync_ok) .. ", err=" .. tostring(sync_err))
+
   if not sync_ok then
-    return true, "File copied but DB sync failed: " .. tostring(sync_err)
+    log_debug("WARNING: File copied but DB sync failed")
+    return true, "File copied to " .. tostring(published_path or "team folder") .. " but DB sync failed: " .. tostring(sync_err)
   end
 
+  log_debug("=== do_publish_to_team SUCCESS ===")
   return true, "Published to Team!"
 end
 
@@ -239,19 +341,111 @@ local function draw_conflict_modal(ctx)
   end
 end
 
+-- Draw debug console window
+local function draw_debug_console(ctx)
+  local ImGui = App.ImGui
+  
+  if not state.show_debug_console then
+    return
+  end
+
+  local window_flags = 0
+  if ImGui.WindowFlags_AlwaysAutoResize then
+    window_flags = ImGui.WindowFlags_AlwaysAutoResize()
+  end
+
+  local is_open = true
+  if ImGui.Begin(ctx, "Debug Console", is_open, window_flags) then
+    -- Toggle button
+    if ImGui.Button(ctx, "Hide Console") then
+      state.show_debug_console = false
+    end
+    
+    ImGui.SameLine(ctx)
+    if ImGui.Button(ctx, "Clear") then
+      debug_logs = {}
+    end
+    
+    ImGui.SameLine(ctx)
+    ImGui.Text(ctx, "(" .. tostring(#debug_logs) .. " lines)")
+
+    ImGui.Separator(ctx)
+    
+    -- Log display area
+    local avail = ImGui.GetContentRegionAvail(ctx)
+    if ImGui.BeginChild(ctx, "##debug_logs", 0, avail - 30, true) then
+      if #debug_logs == 0 then
+        ImGui.TextDisabled(ctx, "No logs yet...")
+      else
+        for i = 1, #debug_logs do
+          local log_line = debug_logs[i]
+          -- Color code: errors in red, warnings in yellow
+          if log_line:find("ERROR") or log_line:find("failed") then
+            local col_text = type(ImGui.Col_Text) == "function" and ImGui.Col_Text() or ImGui.Col_Text
+            if ImGui.PushStyleColor and col_text then
+              ImGui.PushStyleColor(ctx, col_text, 0xFF8080FF)
+              ImGui.Text(ctx, log_line)
+              ImGui.PopStyleColor(ctx, 1)
+            else
+              ImGui.Text(ctx, log_line)
+            end
+          elseif log_line:find("WARNING") then
+            local col_text = type(ImGui.Col_Text) == "function" and ImGui.Col_Text() or ImGui.Col_Text
+            if ImGui.PushStyleColor and col_text then
+              ImGui.PushStyleColor(ctx, col_text, 0xFFFF80FF)
+              ImGui.Text(ctx, log_line)
+              ImGui.PopStyleColor(ctx, 1)
+            else
+              ImGui.Text(ctx, log_line)
+            end
+          else
+            ImGui.Text(ctx, log_line)
+          end
+        end
+        -- Auto-scroll to bottom
+        if ImGui.GetScrollY and ImGui.GetScrollMaxY then
+          local scroll_y = ImGui.GetScrollY(ctx)
+          local scroll_max_y = ImGui.GetScrollMaxY(ctx)
+          if scroll_y < scroll_max_y - 5 then
+            ImGui.SetScrollY(ctx, scroll_max_y)
+          end
+        end
+      end
+      ImGui.EndChild(ctx)
+    end
+  end
+  ImGui.End(ctx)
+  
+  if not is_open then
+    state.show_debug_console = false
+  end
+end
+
 function GuiSaver.draw(ctx)
   local ImGui = App.ImGui
 
   -- Draw conflict modal if active
   draw_conflict_modal(ctx)
 
-  -- Title
+  -- Title with debug console toggle
   if App._theme and App._theme.fonts and App._theme.fonts.heading1 then
     ImGui.PushFont(ctx, App._theme.fonts.heading1)
     ImGui.Text(ctx, "FXMiner - Saver")
     ImGui.PopFont(ctx)
   else
     ImGui.Text(ctx, "FXMiner - Saver")
+  end
+  
+  -- Debug console toggle button
+  ImGui.SameLine(ctx)
+  if state.show_debug_console then
+    if ImGui.SmallButton(ctx, "🔍 Console") then
+      state.show_debug_console = false
+    end
+  else
+    if ImGui.SmallButton(ctx, "🔍 Show Console") then
+      state.show_debug_console = true
+    end
   end
 
   ImGui.Separator(ctx)
@@ -407,32 +601,74 @@ function GuiSaver.draw(ctx)
       })
 
       -- Step 2: Handle team publish if enabled
-      if state.publish_to_team and team_path_valid then
-        local publish_metadata = {
-          name = state.name,
-          description = state.description,
-          metadata = metadata,
-          plugins = plugins_or_err or {},
-        }
-
-        local pub_ok, pub_msg = do_publish_to_team(abs_path, publish_metadata, {})
-
-        if pub_ok == nil then
-          -- Conflict detected - modal will be shown, don't close window yet
-          state.status = "Saved locally. Resolving team conflict..."
-          return
-        elseif pub_ok then
-          state.status = "Saved & " .. tostring(pub_msg)
+      local team_publish_success = true
+      local team_publish_attempted = false
+      
+      log_debug("Save successful, abs_path: " .. tostring(abs_path))
+      
+      if state.publish_to_team then
+        team_publish_attempted = true
+        log_debug("Team publish requested, checking path validity...")
+        log_debug("team_path_valid: " .. tostring(team_path_valid))
+        log_debug("TEAM_PUBLISH_PATH: " .. tostring(Config.TEAM_PUBLISH_PATH))
+        
+        if not team_path_valid then
+          state.status = "Saved locally. Team publish skipped: Path not accessible or not configured"
+          team_publish_success = false
+          log_debug("Team publish skipped: Path not valid")
         else
-          state.status = "Saved locally. Team publish failed: " .. tostring(pub_msg)
+          local publish_metadata = {
+            name = state.name,
+            description = state.description,
+            metadata = metadata,
+            plugins = plugins_or_err or {},
+          }
+
+          log_debug("Calling do_publish_to_team...")
+          local pub_ok, pub_msg = do_publish_to_team(abs_path, publish_metadata, {})
+          log_debug("do_publish_to_team returned: ok=" .. tostring(pub_ok) .. ", msg=" .. tostring(pub_msg))
+
+          if pub_ok == nil then
+            -- Conflict detected - modal will be shown, don't close window yet
+            state.status = "Saved locally. Resolving team conflict..."
+            log_debug("Team publish conflict detected, keeping window open")
+            return
+          elseif pub_ok then
+            state.status = "Saved & " .. tostring(pub_msg)
+            team_publish_success = true
+            log_debug("Team publish successful!")
+          else
+            state.status = "Saved locally. Team publish failed: " .. tostring(pub_msg)
+            team_publish_success = false
+            log_debug("Team publish FAILED: " .. tostring(pub_msg))
+          end
         end
       else
         state.status = "Saved!"
+        log_debug("Team publish not requested")
       end
 
-      -- Close window if no conflict modal is showing
+      -- Close window only if:
+      -- 1. No conflict modal is showing
+      -- 2. Team publish was successful (or not attempted)
+      log_debug("Window close decision: show_conflict_modal=" .. tostring(state.show_conflict_modal) .. ", team_publish_success=" .. tostring(team_publish_success) .. ", team_publish_attempted=" .. tostring(team_publish_attempted))
+      
       if not state.show_conflict_modal then
-        App.open = false
+        if team_publish_attempted then
+          -- If team publish was attempted, only close if successful
+          if team_publish_success then
+            log_debug("Closing window (team publish successful)")
+            App.open = false
+          else
+            log_debug("Keeping window open (team publish failed)")
+          end
+        else
+          -- If team publish was not attempted, close normally
+          log_debug("Closing window (no team publish attempted)")
+          App.open = false
+        end
+      else
+        log_debug("Keeping window open (conflict modal showing)")
       end
       return
     else
@@ -444,6 +680,15 @@ function GuiSaver.draw(ctx)
   if ImGui.Button(ctx, "Cancel") then
     App.open = false
     return
+  end
+
+  -- Show "Close" button if save was successful (to allow closing after seeing team publish status)
+  if state.status and (state.status:find("Saved") or state.status:find("Published")) then
+    ImGui.Spacing(ctx)
+    if ImGui.Button(ctx, "Close", -1, 0) then
+      App.open = false
+      return
+    end
   end
 
   -- Status message

@@ -42,6 +42,11 @@ end
 M.REAPER_RESOURCE_PATH = (r and r.GetResourcePath) and r.GetResourcePath() or ""
 M.FXCHAINS_ROOT = M.path_join(M.REAPER_RESOURCE_PATH, "FXChains")
 
+-- Team download directory (separate from local FXChains to avoid mixing)
+-- Default: FXChains/FXMiner/ - keeps team downloads separate from local files
+M.TEAM_DOWNLOAD_DIR_NAME = "FXMiner"
+M.TEAM_DOWNLOAD_DIR = M.path_join(M.FXCHAINS_ROOT, M.TEAM_DOWNLOAD_DIR_NAME)
+
 -- Data store (non-intrusive)
 M.DATA_DIR_NAME = "_FXMiner_Data"
 M.DATA_DIR_PATH = M.path_join(M.FXCHAINS_ROOT, M.DATA_DIR_NAME)
