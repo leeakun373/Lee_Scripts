@@ -388,7 +388,32 @@ end
 -- Set selected entry (update inspector fields)
 function Utils.set_selected_entry(rel)
   state.selected_rel = rel
-  local e = rel and DB:find_entry_by_rel(rel) or nil
+  if not rel then
+    state.edit_name = ""
+    state.edit_desc = ""
+    state.field_inputs = {}
+    return
+  end
+
+  local is_team_item = rel:match("^team:")
+  local e = nil
+
+  if is_team_item then
+    -- Team mode: find entry from team_entries
+    local filename = rel:gsub("^team:", "")
+    if state.team_entries and type(state.team_entries) == "table" then
+      for _, team_e in ipairs(state.team_entries) do
+        if team_e and team_e.filename == filename then
+          e = team_e
+          break
+        end
+      end
+    end
+  else
+    -- Local mode: find entry from local DB
+    e = rel and DB:find_entry_by_rel(rel) or nil
+  end
+
   if not e then
     state.edit_name = ""
     state.edit_desc = ""
@@ -396,7 +421,11 @@ function Utils.set_selected_entry(rel)
     return
   end
 
-  DB:_ensure_entry_defaults(e)
+  -- For local entries, ensure defaults
+  if not is_team_item then
+    DB:_ensure_entry_defaults(e)
+  end
+
   state.edit_name = tostring(e.name or "")
   state.edit_desc = tostring(e.description or "")
 
@@ -441,8 +470,25 @@ function Utils.build_search_content(e)
   return table.concat(parts, " ")
 end
 
--- Check if entry matches search tokens
-function Utils.matches_search(e, tokens)
+-- Check if entry matches search tokens and filter criteria
+function Utils.matches_search(e, tokens, filter_criteria)
+  -- First check filter criteria (strict field matching)
+  if filter_criteria and type(filter_criteria) == "table" then
+    local field = tostring(filter_criteria.field or "")
+    local value = tostring(filter_criteria.value or "")
+    
+    if field ~= "" and value ~= "" then
+      DB:_ensure_entry_defaults(e)
+      local entry_value = Utils.trim(tostring((e.metadata and e.metadata[field]) or ""))
+      
+      -- Case-insensitive comparison
+      if Utils.lower(entry_value) ~= Utils.lower(value) then
+        return false
+      end
+    end
+  end
+
+  -- Then check search tokens (fuzzy string matching)
   if #tokens == 0 then return true end
 
   local search_content = Utils.build_search_content(e)

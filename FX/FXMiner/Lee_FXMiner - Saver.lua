@@ -1,6 +1,6 @@
 -- @description Lee_FXMiner - Saver
 -- @author Lee
--- @version 1.0.7
+-- @version 2.0.0
 -- @about Save selected track FX Chain into FXChains with shadow DB
 -- @noindex
 

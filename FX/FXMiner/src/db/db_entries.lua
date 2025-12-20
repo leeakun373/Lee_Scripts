@@ -269,6 +269,15 @@ function Entries.init(DB)
     local excluded = (self.cfg and self.cfg.EXCLUDED_FOLDERS) or {}
     local fields = self:get_fields_config()
 
+    -- Try to load FXEngine for plugin parsing
+    local FXEngine = nil
+    local ok_eng, eng = pcall(require, "fx_engine")
+    if ok_eng and eng and eng.parse_rfxchain_file then
+      FXEngine = eng
+    end
+
+    local db_modified = false
+
     local function walk_dir(abs_dir)
       -- files
       local fi = 0
@@ -316,6 +325,15 @@ function Entries.init(DB)
           if not e.keywords or e.keywords == "" then
             self:rebuild_keywords(e)
           end
+
+          -- Fill missing plugins for legacy files
+          if FXEngine and (not e.plugins or #e.plugins == 0) and Utils.file_exists(abs) then
+            local plugins = FXEngine.parse_rfxchain_file(abs)
+            if plugins and #plugins > 0 then
+              e.plugins = plugins
+              db_modified = true
+            end
+          end
         end
       end
 
@@ -334,6 +352,23 @@ function Entries.init(DB)
     end
 
     walk_dir(root)
+
+    -- After scanning, check all existing entries for missing plugins
+    if FXEngine then
+      for _, e in ipairs(self.data.entries) do
+        if e and e.rel_path and (not e.plugins or #e.plugins == 0) then
+          local abs = self:rel_to_abs(e.rel_path)
+          if abs and Utils.file_exists(abs) then
+            local plugins = FXEngine.parse_rfxchain_file(abs)
+            if plugins and #plugins > 0 then
+              e.plugins = plugins
+              db_modified = true
+            end
+          end
+        end
+      end
+    end
+
     self:save()
     return true
   end

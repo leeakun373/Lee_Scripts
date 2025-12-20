@@ -1,5 +1,6 @@
 [
   { "key": "Designer",    "label": "Designer" },
   { "key": "Project",     "label": "Project" },
+  { "key": "Theme",       "label": "Theme" },
   { "key": "Keywords",    "label": "Keywords" }
 ]

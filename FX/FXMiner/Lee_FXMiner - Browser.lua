@@ -1,6 +1,6 @@
 -- @description Lee_FXMiner - Browser
 -- @author Lee
--- @version 1.0.8
+-- @version 2.0.0
 -- @about Browse/search FXChains via shadow DB
 -- @provides
 --   [main] Lee_FXMiner - Saver.lua

@@ -36,8 +36,10 @@ local state = {
   folder_rename_text = "",
   folder_rename_init = false,
 
-  -- icons (optional): prefer emoji, with font if available
-  icon_font = nil, -- emoji font if attached
+  -- library tree UI
+  library_open = {}, -- node_id -> bool
+
+  -- icons: using emojis only
   icon_plus = "➕",
   icon_folder = "📁",
   icon_folder_add = "🗂️",
@@ -68,6 +70,9 @@ local state = {
   delete_target_rel = nil,
   delete_target_name = nil,
   delete_selected_items = false,
+
+  -- Library filter: nil or { field = "Project", value = "TFT" }
+  library_filter = nil,
 }
 
 -- User config file path
@@ -158,6 +163,7 @@ function State.init(Config)
   state.delete_target_rel = nil
   state.delete_target_name = nil
   state.delete_selected_items = false
+  state.library_filter = nil
 end
 
 -- Get state table

@@ -7,32 +7,17 @@ local GuiSaver = {}
 
 local App, DB, Engine, Config
 
--- Debug logging system
-local debug_logs = {}
-local MAX_LOG_LINES = 100
-
+-- Debug logging (console only, no UI)
 local function log_debug(msg)
   local r = reaper
   -- Output to Reaper console if available
   if r and r.ShowConsoleMsg then
     r.ShowConsoleMsg("[FXMiner Saver] " .. tostring(msg) .. "\n")
   end
-  
-  -- Also store in debug_logs for UI display
-  local timestamp = os.date("%H:%M:%S")
-  table.insert(debug_logs, timestamp .. " | " .. tostring(msg))
-  
-  -- Keep only last MAX_LOG_LINES
-  if #debug_logs > MAX_LOG_LINES then
-    table.remove(debug_logs, 1)
-  end
 end
 
 local state = {
   name = "",
-  -- Physical folder (on disk)
-  disk_folder_list = {""},
-  disk_folder_idx = 1,
   -- Virtual folder (in DB)
   virtual_folder_id = 0,
   -- Dynamic fields (from config_fields.json)
@@ -43,8 +28,6 @@ local state = {
   publish_to_team = false,
   -- Status message
   status = "",
-  -- Debug console
-  show_debug_console = true,  -- Show by default
 
   -- Publish conflict modal state
   show_conflict_modal = false,
@@ -56,46 +39,6 @@ local state = {
 
 local function trim(s)
   return tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", "")
-end
-
--- Build list of physical subdirectories under FXChains root
-local function build_disk_folder_list()
-  local sep = Config.PATH_SEP
-
-  local list = {""} -- root
-
-  local function path_join(a, b)
-    if not a or a == "" then return b end
-    if not b or b == "" then return a end
-    a = tostring(a):gsub("[\\/]+$", "")
-    b = tostring(b):gsub("^[\\/]+", "")
-    return a .. sep .. b
-  end
-
-  local function walk(abs_dir, rel_prefix)
-    local idx = 0
-    while true do
-      local sub = reaper.EnumerateSubdirectories(abs_dir, idx)
-      if not sub then break end
-      idx = idx + 1
-
-      if not (Config.EXCLUDED_FOLDERS and Config.EXCLUDED_FOLDERS[sub]) then
-        local rel = (rel_prefix == "") and sub or (rel_prefix .. "/" .. sub)
-        list[#list + 1] = rel
-        walk(path_join(abs_dir, sub), rel)
-      end
-    end
-  end
-
-  walk(Config.FXCHAINS_ROOT, "")
-
-  table.sort(list, function(a, b)
-    if a == "" then return true end
-    if b == "" then return false end
-    return a:lower() < b:lower()
-  end)
-
-  return list
 end
 
 -- Build flat list of virtual folders for dropdown (synced with Browser display)
@@ -174,20 +117,15 @@ function GuiSaver.init(app_ctx, db_instance, fx_engine, cfg)
   log_debug("Config loaded - TEAM_PUBLISH_PATH: " .. tostring(Config.TEAM_PUBLISH_PATH))
 
   state.name = Engine.get_selected_track_name() or "Untitled Chain"
-  state.disk_folder_list = build_disk_folder_list()
-  state.disk_folder_idx = 1
   state.virtual_folder_id = 0
   state.field_inputs = {}
   state.description = ""
   state.publish_to_team = false
   state.status = ""
-  state.show_debug_console = true  -- Show console by default
 
   -- Reset conflict modal state
   state.show_conflict_modal = false
   
-  -- Clear debug logs on init
-  debug_logs = {}
   log_debug("FXMiner Saver initialized")
   state.conflict_target_path = nil
   state.conflict_source_path = nil
@@ -341,111 +279,19 @@ local function draw_conflict_modal(ctx)
   end
 end
 
--- Draw debug console window
-local function draw_debug_console(ctx)
-  local ImGui = App.ImGui
-  
-  if not state.show_debug_console then
-    return
-  end
-
-  local window_flags = 0
-  if ImGui.WindowFlags_AlwaysAutoResize then
-    window_flags = ImGui.WindowFlags_AlwaysAutoResize()
-  end
-
-  local is_open = true
-  if ImGui.Begin(ctx, "Debug Console", is_open, window_flags) then
-    -- Toggle button
-    if ImGui.Button(ctx, "Hide Console") then
-      state.show_debug_console = false
-    end
-    
-    ImGui.SameLine(ctx)
-    if ImGui.Button(ctx, "Clear") then
-      debug_logs = {}
-    end
-    
-    ImGui.SameLine(ctx)
-    ImGui.Text(ctx, "(" .. tostring(#debug_logs) .. " lines)")
-
-    ImGui.Separator(ctx)
-    
-    -- Log display area
-    local avail = ImGui.GetContentRegionAvail(ctx)
-    if ImGui.BeginChild(ctx, "##debug_logs", 0, avail - 30, true) then
-      if #debug_logs == 0 then
-        ImGui.TextDisabled(ctx, "No logs yet...")
-      else
-        for i = 1, #debug_logs do
-          local log_line = debug_logs[i]
-          -- Color code: errors in red, warnings in yellow
-          if log_line:find("ERROR") or log_line:find("failed") then
-            local col_text = type(ImGui.Col_Text) == "function" and ImGui.Col_Text() or ImGui.Col_Text
-            if ImGui.PushStyleColor and col_text then
-              ImGui.PushStyleColor(ctx, col_text, 0xFF8080FF)
-              ImGui.Text(ctx, log_line)
-              ImGui.PopStyleColor(ctx, 1)
-            else
-              ImGui.Text(ctx, log_line)
-            end
-          elseif log_line:find("WARNING") then
-            local col_text = type(ImGui.Col_Text) == "function" and ImGui.Col_Text() or ImGui.Col_Text
-            if ImGui.PushStyleColor and col_text then
-              ImGui.PushStyleColor(ctx, col_text, 0xFFFF80FF)
-              ImGui.Text(ctx, log_line)
-              ImGui.PopStyleColor(ctx, 1)
-            else
-              ImGui.Text(ctx, log_line)
-            end
-          else
-            ImGui.Text(ctx, log_line)
-          end
-        end
-        -- Auto-scroll to bottom
-        if ImGui.GetScrollY and ImGui.GetScrollMaxY then
-          local scroll_y = ImGui.GetScrollY(ctx)
-          local scroll_max_y = ImGui.GetScrollMaxY(ctx)
-          if scroll_y < scroll_max_y - 5 then
-            ImGui.SetScrollY(ctx, scroll_max_y)
-          end
-        end
-      end
-      ImGui.EndChild(ctx)
-    end
-  end
-  ImGui.End(ctx)
-  
-  if not is_open then
-    state.show_debug_console = false
-  end
-end
-
 function GuiSaver.draw(ctx)
   local ImGui = App.ImGui
 
   -- Draw conflict modal if active
   draw_conflict_modal(ctx)
 
-  -- Title with debug console toggle
+  -- Title
   if App._theme and App._theme.fonts and App._theme.fonts.heading1 then
     ImGui.PushFont(ctx, App._theme.fonts.heading1)
     ImGui.Text(ctx, "FXMiner - Saver")
     ImGui.PopFont(ctx)
   else
     ImGui.Text(ctx, "FXMiner - Saver")
-  end
-  
-  -- Debug console toggle button
-  ImGui.SameLine(ctx)
-  if state.show_debug_console then
-    if ImGui.SmallButton(ctx, "🔍 Console") then
-      state.show_debug_console = false
-    end
-  else
-    if ImGui.SmallButton(ctx, "🔍 Show Console") then
-      state.show_debug_console = true
-    end
   end
 
   ImGui.Separator(ctx)
@@ -481,33 +327,6 @@ function GuiSaver.draw(ctx)
     ImGui.EndCombo(ctx)
   end
   ImGui.PopItemWidth(ctx)
-
-  ImGui.Spacing(ctx)
-
-  -- Physical Folder (on disk)
-  W.separator_text(ctx, ImGui, "Save to Disk Folder")
-  ImGui.PushItemWidth(ctx, -1)
-
-  local df_preview = state.disk_folder_list[state.disk_folder_idx] or ""
-  if df_preview == "" then df_preview = "(FXChains root)" end
-
-  if ImGui.BeginCombo(ctx, "##saver_dfolder", df_preview) then
-    for i = 1, #state.disk_folder_list do
-      local item = state.disk_folder_list[i]
-      local label = item
-      if label == "" then label = "(FXChains root)" end
-      if ImGui.Selectable(ctx, label .. "##df_" .. tostring(i), i == state.disk_folder_idx) then
-        state.disk_folder_idx = i
-      end
-    end
-    ImGui.EndCombo(ctx)
-  end
-  ImGui.PopItemWidth(ctx)
-
-  if ImGui.SmallButton(ctx, "Refresh folders") then
-    state.disk_folder_list = build_disk_folder_list()
-    state.disk_folder_idx = math.min(state.disk_folder_idx, #state.disk_folder_list)
-  end
 
   ImGui.Spacing(ctx)
 
@@ -572,7 +391,8 @@ function GuiSaver.draw(ctx)
 
   -- Save button
   if ImGui.Button(ctx, "SAVE", 120, 0) then
-    local disk_folder = state.disk_folder_list[state.disk_folder_idx] or ""
+    -- Save to FXChains root (no subfolder selection)
+    local disk_folder = ""
 
     -- Step 1: Save to local disk (without team publish option - we handle that separately)
     local ok, abs_path, plugins_or_err = Engine.save_chain_to_disk(Config, state.name, disk_folder, {

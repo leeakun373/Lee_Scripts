@@ -282,6 +282,7 @@ function Engine.extract_plugins(rfx_text)
   end
 
   for line in rfx_text:gmatch("[^\r\n]+") do
+    -- Match plugin lines: <VST "...", <JS "...", <AU "...", <DX "...", <CLAP "..."
     -- Typical: <VST "VST: ReaEQ (Cockos)" reacomp.dll ...>
     local name = line:match('^<%w+%s+"([^"]+)"')
     if name and not seen[name] then
@@ -291,6 +292,32 @@ function Engine.extract_plugins(rfx_text)
   end
 
   return plugins
+end
+
+-- Parse RfxChain file and extract plugin names
+-- Returns: table of plugin name strings, e.g., {"ReaEQ", "Pro-Q 3"}
+function Engine.parse_rfxchain_file(file_path)
+  if not file_path or file_path == "" then
+    return {}
+  end
+
+  if not file_exists(file_path) then
+    return {}
+  end
+
+  local f = io.open(file_path, "rb")
+  if not f then
+    return {}
+  end
+
+  local content = f:read("*all")
+  f:close()
+
+  if not content or content == "" then
+    return {}
+  end
+
+  return Engine.extract_plugins(content)
 end
 
 local function extract_fxchain_from_track_chunk(tr)

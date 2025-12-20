@@ -7,6 +7,7 @@ local Fields = require("db.db_fields")
 local Entries = require("db.db_entries")
 local Folders = require("db.db_folders")
 local TeamSync = require("db.db_team_sync")
+local Themes = require("db.db_themes")
 
 local DB = {}
 DB.__index = DB
@@ -29,12 +30,17 @@ function DB:new(cfg)
   o.folders = nil
   o.folders_path = nil
 
+  -- themes db (new)
+  o.themes_data = nil
+  o.themes_db_path = nil
+
   -- Initialize all modules
   Core.init(o)
   Fields.init(o)
   Entries.init(o)
   Folders.init(o)
   TeamSync.init(o)
+  Themes.init(o)
 
   return o
 end
@@ -59,13 +65,16 @@ function DB:ensure_initialized(script_root)
   -- 2. Load/initialize fields config
   self:load_fields_config(script_root)
 
-  -- 3. Load/initialize folders DB
+  -- 3. Load/initialize themes DB
+  self:load_themes_db(script_root)
+
+  -- 4. Load/initialize folders DB
   self:load_folders(script_root)
 
-  -- 4. Load main entries DB
+  -- 5. Load main entries DB
   self:load()
 
-  -- 5. Migrate entries after load (ensure defaults are applied)
+  -- 6. Migrate entries after load (ensure defaults are applied)
   if self.data and type(self.data.entries) == "table" then
     for _, e in ipairs(self.data.entries) do
       self:_ensure_entry_defaults(e)
@@ -79,7 +88,7 @@ function DB:ensure_initialized(script_root)
     self:_reindex()
   end
 
-  -- 6. Local scan and prune
+  -- 7. Local scan and prune
   pcall(function()
     self:scan_fxchains()
     self:prune_missing_files()
