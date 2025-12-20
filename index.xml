@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="18cbffa632e14229c9cfc2599b91d299a464f071" name="Lee_Scripts">
+<index version="1" commit="02001b9577c040631606ee55587322380d565376" name="Lee_Scripts">
   <category name="FX/FXMiner">
     <reapack name="Lee_FXMiner - Browser.lua" type="script" desc="Lee_FXMiner - Browser">
       <metadata>
@@ -61,6 +61,32 @@
         <source file="src/json.lua">https://github.com/leeakun373/Lee_Scripts/raw/18cbffa632e14229c9cfc2599b91d299a464f071/FX/FXMiner/src/json.lua</source>
         <source file="config_fields.json">https://github.com/leeakun373/Lee_Scripts/raw/18cbffa632e14229c9cfc2599b91d299a464f071/FX/FXMiner/config_fields.json</source>
         <source file="folders_db.json">https://github.com/leeakun373/Lee_Scripts/raw/18cbffa632e14229c9cfc2599b91d299a464f071/FX/FXMiner/folders_db.json</source>
+      </version>
+      <version name="1.0.7" author="Lee" time="2025-12-20T09:19:48Z">
+        <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/02001b9577c040631606ee55587322380d565376/FX/FXMiner/Lee_FXMiner%20-%20Browser.lua</source>
+        <source main="main" file="Lee_FXMiner - Saver.lua">https://github.com/leeakun373/Lee_Scripts/raw/02001b9577c040631606ee55587322380d565376/FX/FXMiner/Lee_FXMiner%20-%20Saver.lua</source>
+        <source file="src/config.lua">https://github.com/leeakun373/Lee_Scripts/raw/02001b9577c040631606ee55587322380d565376/FX/FXMiner/src/config.lua</source>
+        <source file="src/db/db.lua">https://github.com/leeakun373/Lee_Scripts/raw/02001b9577c040631606ee55587322380d565376/FX/FXMiner/src/db/db.lua</source>
+        <source file="src/db/db_core.lua">https://github.com/leeakun373/Lee_Scripts/raw/02001b9577c040631606ee55587322380d565376/FX/FXMiner/src/db/db_core.lua</source>
+        <source file="src/db/db_entries.lua">https://github.com/leeakun373/Lee_Scripts/raw/02001b9577c040631606ee55587322380d565376/FX/FXMiner/src/db/db_entries.lua</source>
+        <source file="src/db/db_fields.lua">https://github.com/leeakun373/Lee_Scripts/raw/02001b9577c040631606ee55587322380d565376/FX/FXMiner/src/db/db_fields.lua</source>
+        <source file="src/db/db_folders.lua">https://github.com/leeakun373/Lee_Scripts/raw/02001b9577c040631606ee55587322380d565376/FX/FXMiner/src/db/db_folders.lua</source>
+        <source file="src/db/db_team_sync.lua">https://github.com/leeakun373/Lee_Scripts/raw/02001b9577c040631606ee55587322380d565376/FX/FXMiner/src/db/db_team_sync.lua</source>
+        <source file="src/db/db_utils.lua">https://github.com/leeakun373/Lee_Scripts/raw/02001b9577c040631606ee55587322380d565376/FX/FXMiner/src/db/db_utils.lua</source>
+        <source file="src/fx_engine.lua">https://github.com/leeakun373/Lee_Scripts/raw/02001b9577c040631606ee55587322380d565376/FX/FXMiner/src/fx_engine.lua</source>
+        <source file="src/gui_browser.lua">https://github.com/leeakun373/Lee_Scripts/raw/02001b9577c040631606ee55587322380d565376/FX/FXMiner/src/gui_browser.lua</source>
+        <source file="src/gui_browser/gui_delete_dialog.lua">https://github.com/leeakun373/Lee_Scripts/raw/02001b9577c040631606ee55587322380d565376/FX/FXMiner/src/gui_browser/gui_delete_dialog.lua</source>
+        <source file="src/gui_browser/gui_folders.lua">https://github.com/leeakun373/Lee_Scripts/raw/02001b9577c040631606ee55587322380d565376/FX/FXMiner/src/gui_browser/gui_folders.lua</source>
+        <source file="src/gui_browser/gui_inspector.lua">https://github.com/leeakun373/Lee_Scripts/raw/02001b9577c040631606ee55587322380d565376/FX/FXMiner/src/gui_browser/gui_inspector.lua</source>
+        <source file="src/gui_browser/gui_list.lua">https://github.com/leeakun373/Lee_Scripts/raw/02001b9577c040631606ee55587322380d565376/FX/FXMiner/src/gui_browser/gui_list.lua</source>
+        <source file="src/gui_browser/gui_settings.lua">https://github.com/leeakun373/Lee_Scripts/raw/02001b9577c040631606ee55587322380d565376/FX/FXMiner/src/gui_browser/gui_settings.lua</source>
+        <source file="src/gui_browser/gui_state.lua">https://github.com/leeakun373/Lee_Scripts/raw/02001b9577c040631606ee55587322380d565376/FX/FXMiner/src/gui_browser/gui_state.lua</source>
+        <source file="src/gui_browser/gui_topbar.lua">https://github.com/leeakun373/Lee_Scripts/raw/02001b9577c040631606ee55587322380d565376/FX/FXMiner/src/gui_browser/gui_topbar.lua</source>
+        <source file="src/gui_browser/gui_utils.lua">https://github.com/leeakun373/Lee_Scripts/raw/02001b9577c040631606ee55587322380d565376/FX/FXMiner/src/gui_browser/gui_utils.lua</source>
+        <source file="src/gui_saver.lua">https://github.com/leeakun373/Lee_Scripts/raw/02001b9577c040631606ee55587322380d565376/FX/FXMiner/src/gui_saver.lua</source>
+        <source file="src/json.lua">https://github.com/leeakun373/Lee_Scripts/raw/02001b9577c040631606ee55587322380d565376/FX/FXMiner/src/json.lua</source>
+        <source file="config_fields.json">https://github.com/leeakun373/Lee_Scripts/raw/02001b9577c040631606ee55587322380d565376/FX/FXMiner/config_fields.json</source>
+        <source file="folders_db.json">https://github.com/leeakun373/Lee_Scripts/raw/02001b9577c040631606ee55587322380d565376/FX/FXMiner/folders_db.json</source>
       </version>
     </reapack>
   </category>
