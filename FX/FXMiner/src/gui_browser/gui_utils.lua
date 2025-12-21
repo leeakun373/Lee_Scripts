@@ -320,6 +320,67 @@ function Utils.safe_append_fxchain_to_selected_items_or_track(abs_path)
   return Utils.safe_append_fxchain(abs_path)
 end
 
+-- Smart track detection for drag & drop (handles empty area)
+-- Returns track, take, and whether a new track was created
+-- Based on RadialMenu_Tool's implementation pattern
+local function smart_get_track_from_point(x, y, create_if_empty)
+  local r = reaper
+  local track = nil
+  local take = nil
+  local created_new_track = false
+  
+  -- 1. 优先检测 Item (GetItemFromPoint 是最准确的) - 参考 RadialMenu_Tool
+  local item
+  if r.GetItemFromPoint then
+    item, take = r.GetItemFromPoint(x, y, true)
+    if item then
+      track = r.GetMediaItem_Track(item)
+      if track then
+        return track, take, false -- Found item, return immediately
+      end
+    end
+  end
+  
+  -- 2. 如果不是 Item，检测 Track - 参考 RadialMenu_Tool 的简洁实现
+  if r.GetTrackFromPoint then
+    -- GetTrackFromPoint returns (track, info) or just track
+    local ok, result = pcall(function()
+      return r.GetTrackFromPoint(x, y)
+    end)
+    if ok then
+      -- Handle different return formats
+      if result then
+        -- Check if it's a valid track pointer
+        if r.ValidatePtr and r.ValidatePtr(result, "MediaTrack*") then
+          track = result
+        elseif type(result) == "userdata" then
+          -- Might be a track pointer without ValidatePtr available
+          track = result
+        end
+      end
+    end
+  end
+  
+  -- 3. 如果都不是且 create_if_empty 为 true，新建轨道 - 完全参考 RadialMenu_Tool 的实现
+  if not track and create_if_empty then
+    r.PreventUIRefresh(1)
+    r.InsertTrackAtIndex(r.CountTracks(0), true)
+    -- 插入后重新查询总数，新轨道索引 = CountTracks(0) - 1
+    track = r.GetTrack(0, r.CountTracks(0) - 1)
+    created_new_track = true
+    
+    -- Select the new track for visual feedback
+    if track then
+      r.SetOnlyTrackSelected(track)
+    end
+    
+    r.PreventUIRefresh(-1)
+    r.UpdateArrange()
+  end
+  
+  return track, take, created_new_track
+end
+
 -- Drag & drop update
 function Utils.dnd_update(ctx)
   local ImGui = App.ImGui
@@ -334,26 +395,10 @@ function Utils.dnd_update(ctx)
     ImGui.SetTooltip(ctx, state.dnd_name)
   end
 
-  local x, y = r.GetMousePosition()
-  local track = nil
-  local take = nil
-
-  if r.GetItemFromPoint and r.GetMediaItem_Track then
-    local item
-    item, take = r.GetItemFromPoint(x, y, false)
-    if item then
-      track = r.GetMediaItem_Track(item)
-    end
-  end
-
-  if (not track) and r.GetThingFromPoint then
-    local t = r.GetThingFromPoint(x, y)
-    if t then track = t end
-  end
-
-  -- If not over a track/item and mouse is over our UI, don't consume payload
-  if not track and ImGui.IsWindowHovered and ImGui.HoveredFlags_AnyWindow then
+  -- Check if we're dragging outside our UI window
+  if ImGui.IsWindowHovered and ImGui.HoveredFlags_AnyWindow then
     if ImGui.IsWindowHovered(ctx, ImGui.HoveredFlags_AnyWindow) then
+      -- Mouse is over our UI, don't process drag to REAPER
       return
     end
   end
@@ -364,11 +409,29 @@ function Utils.dnd_update(ctx)
       return rrv, pp
     end)
     if ok and rv and payload and payload ~= "" then
+      -- Get mouse position when payload is accepted
+      local x, y = r.GetMousePosition()
+      
+      -- Use smart track detection with create_if_empty=true
+      -- This will create a new track if mouse is over empty area
+      local track, take, created_new = smart_get_track_from_point(x, y, true)
+      
       local rel = tostring(payload)
       local e = DB:find_entry_by_rel(rel)
       if e then
         local abs = DB:rel_to_abs(e.rel_path)
         local ok2, err
+        
+        if not track then
+          -- Still no track after trying to create - might be outside arrange view
+          state.status = "Drop failed: Not over a valid track or arrange area"
+          state.dnd_name = nil
+          return
+        end
+        
+        r.Undo_BeginBlock()
+        r.PreventUIRefresh(1)
+        
         -- Prefer take when dropping on item
         if take then
           ok2, err = Utils.safe_append_fxchain_to_take(take, abs)
@@ -378,6 +441,12 @@ function Utils.dnd_update(ctx)
         else
           ok2, err = Utils.safe_append_fxchain_to_track(track, abs)
         end
+        
+        r.PreventUIRefresh(-1)
+        local undo_name = created_new and "FXMiner: Load FX Chain (New Track)" or "FXMiner: Load FX Chain"
+        r.Undo_EndBlock(undo_name, -1)
+        r.UpdateArrange()
+        
         state.status = ok2 and ("Loaded: " .. tostring(e.name or "")) or ("Load failed: " .. tostring(err))
       end
       state.dnd_name = nil

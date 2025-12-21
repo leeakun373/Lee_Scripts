@@ -73,6 +73,9 @@ local state = {
 
   -- Library filter: nil or { field = "Project", value = "TFT" }
   library_filter = nil,
+
+  -- Installed FX map cache (lazy loaded)
+  installed_fx_map = nil,
 }
 
 -- User config file path
@@ -164,6 +167,8 @@ function State.init(Config)
   state.delete_target_name = nil
   state.delete_selected_items = false
   state.library_filter = nil
+  state.list_clipper = nil -- Ensure clipper is reset on state init
+  state.installed_fx_map = nil -- Reset installed FX map cache
 end
 
 -- Get state table

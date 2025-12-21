@@ -1,6 +1,11 @@
 -- @description Lee_FXMiner - Browser
 -- @author Lee
--- @version 2.0.0
+-- @version 2.0.1
+-- @changelog
+--   + Added plugin availability check in Chain Preview (red highlight for missing plugins)
+--   + Improved drag & drop: auto-create new track when dropping to empty area
+--   + Fixed Inspector not updating when selecting chains in Team mode
+--   + Optimized plugin detection using reaper.EnumInstalledFX API
 -- @about Browse/search FXChains via shadow DB
 -- @provides
 --   [main] Lee_FXMiner - Saver.lua

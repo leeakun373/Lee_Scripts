@@ -579,4 +579,27 @@ function Engine.save_chain_to_disk(cfg, name, subdir_rel, opts)
   return true, out_path, plugins
 end
 
+-- Get installed FX map for plugin availability checking
+-- Returns a lookup table: { ["插件名"] = true, ["去前缀插件名"] = true }
+function Engine.get_installed_fx_map()
+  local map = {}
+  local i = 0
+  while true do
+    local retval, name = r.EnumInstalledFX(i)
+    if not retval then break end
+    if name then
+      -- Store original name
+      map[name] = true
+      -- Also store a version without prefix to increase match rate
+      -- Pattern matches: VST:, VST3:, JS:, AU:, CLAP:, DX: at start of string
+      local clean = name:gsub("^%w+:%s+", "")
+      if clean ~= name then 
+        map[clean] = true 
+      end
+    end
+    i = i + 1
+  end
+  return map
+end
+
 return Engine

@@ -18,67 +18,9 @@ local DeleteDialog = require("gui_browser.gui_delete_dialog")
 local App, DB, Config, Engine = nil, nil, nil, nil
 local state = nil
 
--- Drag & drop update (external drop)
+-- Drag & drop update (external drop) - delegates to Utils.dnd_update
 local function dnd_update(ctx)
-  local ImGui = App.ImGui
-  local r = reaper
-
-  if not (ImGui.GetDragDropPayload and ImGui.GetDragDropPayload(ctx)) then
-    state.dnd_name = nil
-    return
-  end
-
-  if state.dnd_name and ImGui.SetTooltip then
-    ImGui.SetTooltip(ctx, state.dnd_name)
-  end
-
-  local x, y = r.GetMousePosition()
-  local track = nil
-  local take = nil
-
-  if r.GetItemFromPoint and r.GetMediaItem_Track then
-    local item
-    item, take = r.GetItemFromPoint(x, y, false)
-    if item then
-      track = r.GetMediaItem_Track(item)
-    end
-  end
-
-  if (not track) and r.GetThingFromPoint then
-    local t = r.GetThingFromPoint(x, y)
-    if t then track = t end
-  end
-
-  if not track and ImGui.IsWindowHovered and ImGui.HoveredFlags_AnyWindow then
-    if ImGui.IsWindowHovered(ctx, ImGui.HoveredFlags_AnyWindow) then
-      return
-    end
-  end
-
-  if ImGui.AcceptDragDropPayload then
-    local ok, rv, payload = pcall(function()
-      local rrv, pp = ImGui.AcceptDragDropPayload(ctx, "FXMINER_ENTRY")
-      return rrv, pp
-    end)
-    if ok and rv and payload and payload ~= "" then
-      local rel = tostring(payload)
-      local e = DB:find_entry_by_rel(rel)
-      if e then
-        local abs = DB:rel_to_abs(e.rel_path)
-        local ok2, err
-        if take then
-          ok2, err = Utils.safe_append_fxchain_to_take(take, abs)
-          if not ok2 then
-            ok2, err = Utils.safe_append_fxchain_to_track(track, abs)
-          end
-        else
-          ok2, err = Utils.safe_append_fxchain_to_track(track, abs)
-        end
-        state.status = ok2 and ("Loaded: " .. tostring(e.name or "")) or ("Load failed: " .. tostring(err))
-      end
-      state.dnd_name = nil
-    end
-  end
+  Utils.dnd_update(ctx)
 end
 
 function GuiBrowser.init(app_ctx, db_instance, cfg)
@@ -108,7 +50,7 @@ function GuiBrowser.init(app_ctx, db_instance, cfg)
   Settings.init(App, DB, Config, Engine, state, State.save_user_config)
   Folders.init(state, App, DB, Config, Utils)
   Inspector.init(state, App, DB, Config, Utils, List)
-  Preview.init(state, App, DB, Config)
+  Preview.init(state, App, DB, Config, Engine)
   DeleteDialog.init(state, App, DB, Config, Utils, List)
 end
 

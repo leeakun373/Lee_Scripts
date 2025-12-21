@@ -8,13 +8,63 @@ local GuiPreview = {}
 -- Get dependencies (will be injected)
 local state = nil
 local App, DB, Config = nil, nil, nil
+local Engine = nil
 
 -- Initialize dependencies
-function GuiPreview.init(_state, _App, _DB, _Config)
+function GuiPreview.init(_state, _App, _DB, _Config, _Engine)
   state = _state
   App = _App
   DB = _DB
   Config = _Config
+  Engine = _Engine
+end
+
+-- Lazy load Engine if not provided
+local function ensure_engine()
+  if Engine then return true end
+  local ok, eng = pcall(require, "fx_engine")
+  if ok and eng then
+    Engine = eng
+    return true
+  end
+  return false
+end
+
+-- Check if a plugin is installed
+local function is_plugin_installed(plugin_name)
+  if not plugin_name or plugin_name == "" then return false end
+  
+  -- Ensure Engine is available
+  if not ensure_engine() then return true end -- If Engine not available, assume installed to avoid false positives
+  
+  -- Lazy load installed FX map
+  if not state.installed_fx_map then
+    if Engine and Engine.get_installed_fx_map then
+      state.installed_fx_map = Engine.get_installed_fx_map()
+    else
+      state.installed_fx_map = {} -- Empty map if function not available
+    end
+  end
+  
+  local map = state.installed_fx_map or {}
+  
+  -- Try exact match first
+  if map[plugin_name] then
+    return true
+  end
+  
+  -- Try fuzzy match (check if any key contains the plugin name or vice versa)
+  for key, _ in pairs(map) do
+    if key == plugin_name then
+      return true
+    end
+    -- Simple substring matching
+    if string.find(key, plugin_name, 1, true) or string.find(plugin_name, key, 1, true) then
+      return true
+    end
+  end
+  
+  return false
 end
 
 -- Draw the preview panel
@@ -71,12 +121,32 @@ function GuiPreview.draw(ctx)
     for i, plugin_name in ipairs(e.plugins) do
       local name = tostring(plugin_name or "")
       if name ~= "" then
+        -- Check if plugin is installed
+        local is_installed = is_plugin_installed(name)
+        
+        -- If not installed, use red color
+        if not is_installed then
+          local col_text = type(ImGui.Col_Text) == "function" and ImGui.Col_Text() or ImGui.Col_Text
+          if ImGui.PushStyleColor and col_text then
+            ImGui.PushStyleColor(ctx, col_text, 0xFF5555FF) -- Red color
+          end
+        end
+        
         -- Display with index number
         ImGui.Text(ctx, string.format("%d. %s", i, name))
         
-        -- Show full name on hover (for long plugin names)
+        -- Show tooltip
         if ImGui.IsItemHovered and ImGui.IsItemHovered(ctx) and ImGui.SetTooltip then
-          ImGui.SetTooltip(ctx, name)
+          if not is_installed then
+            ImGui.SetTooltip(ctx, "Plugin not found on this system")
+          else
+            ImGui.SetTooltip(ctx, name)
+          end
+        end
+        
+        -- Pop color if we pushed it
+        if not is_installed and ImGui.PopStyleColor then
+          ImGui.PopStyleColor(ctx, 1)
         end
       end
     end
