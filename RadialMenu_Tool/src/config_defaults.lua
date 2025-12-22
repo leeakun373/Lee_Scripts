@@ -24,8 +24,8 @@ return {
 
     -- Sector Expansion Settings
     enable_sector_expansion = true, -- 启用扇区膨胀动画
-    hover_expansion_pixels = 10, -- 悬停时扇区向外扩展的像素数
-    hover_animation_speed = 4, -- 悬停扩展动画速度 (1-10 整数刻度)
+    hover_expansion_pixels = 4, -- 悬停时扇区向外扩展的像素数
+    hover_animation_speed = 8, -- 悬停扩展动画速度 (1-10 整数刻度)
 
     -- Submenu slot size
     slot_width = 65, -- 子菜单插槽宽度（像素）

@@ -19,6 +19,7 @@ local utils_fx = require("utils_fx")
 
 local settings_state = require("settings.state")
 local ops = require("settings.ops")
+local i18n = require("utils.i18n")
 
 -- 设置界面模块
 local tab_preview = require("settings.tabs.preview")
@@ -69,14 +70,14 @@ function M.init()
     
     -- 检查 ReaImGui 是否可用
     if not reaper.ImGui_CreateContext then
-        reaper.ShowMessageBox("错误: ReaImGui 未安装或不可用", "初始化失败", 0)
+        reaper.ShowMessageBox(i18n.t("error_reaimgui_not_available"), i18n.t("error_init_failed"), 0)
         return false
     end
     
     -- 创建 ImGui 上下文
     ctx = reaper.ImGui_CreateContext("RadialMenu_Settings", reaper.ImGui_ConfigFlags_None())
     if not ctx then
-        reaper.ShowMessageBox("错误: 无法创建 ImGui 上下文", "初始化失败", 0)
+        reaper.ShowMessageBox(i18n.t("error_cannot_create_context"), i18n.t("error_init_failed"), 0)
         return false
     end
     
@@ -84,7 +85,7 @@ function M.init()
     -- 加载配置
     config = config_manager.load()
     if not config then
-        reaper.ShowMessageBox("错误: 无法加载配置", "初始化失败", 0)
+        reaper.ShowMessageBox(i18n.t("error_cannot_load_config"), i18n.t("error_init_failed"), 0)
         return false
     end
     
@@ -98,6 +99,8 @@ function M.init()
     styles.init_from_config(config)
     
     -- 初始化状态变量
+    -- 同步语言状态
+    state.language = i18n.get_language()
     is_open = true
     state.is_modified = false
     state.selected_sector_index = nil
@@ -215,8 +218,10 @@ function M.draw()
     -- 注意：使用 ImGui_Cond_FirstUseEver 确保只在首次运行时生效，不会覆盖用户手动调整的窗口大小
     reaper.ImGui_SetNextWindowSize(ctx, 800, 600, reaper.ImGui_Cond_FirstUseEver())
     
-    -- 开始窗口
-    local visible, open = reaper.ImGui_Begin(ctx, "RadialMenu 设置编辑器", true, reaper.ImGui_WindowFlags_None())
+    -- 开始窗口（禁用折叠按钮，参考 FXMiner 风格）
+    -- 使用固定标题避免切换语言时窗口大小变化
+    local window_flags = reaper.ImGui_WindowFlags_NoCollapse()
+    local visible, open = reaper.ImGui_Begin(ctx, "RadialMenu Settings", true, window_flags)
     
     -- 如果窗口不可见，直接返回（不需要调用 End）
     if not visible then
@@ -233,9 +238,7 @@ function M.draw()
         return
     end
     
-    -- [REMOVED Title Text] - Window title bar already displays this information
-    
-    -- 绘制操作栏（现在位于顶部）
+    -- 绘制操作栏（现在位于顶部，从左开始排列）
     M.draw_action_bar()
     
     reaper.ImGui_Separator(ctx)
@@ -291,7 +294,7 @@ function M.draw()
                     reaper.ImGui_Spacing(ctx)
                     
                     local avail_w = reaper.ImGui_GetContentRegionAvail(ctx)
-                    local text = "👋 将 Action 或 FX 拖入上方插槽"
+                    local text = i18n.t("drag_hint_empty_slot")
                     local text_w = reaper.ImGui_CalcTextSize(ctx, text)
                     local pad_x = (avail_w - text_w) / 2
                     
@@ -300,7 +303,7 @@ function M.draw()
                     reaper.ImGui_TextDisabled(ctx, text)
                     
                     -- 子提示
-                    local sub_text = "(支持从下方搜索列表直接拖拽)"
+                    local sub_text = i18n.t("drag_hint_sub")
                     local sub_w = reaper.ImGui_CalcTextSize(ctx, sub_text)
                     local sub_pad_x = (avail_w - sub_w) / 2
                     if sub_pad_x > 0 then reaper.ImGui_SetCursorPosX(ctx, reaper.ImGui_GetCursorPosX(ctx) + sub_pad_x) end
@@ -313,7 +316,7 @@ function M.draw()
                 -- 未选中插槽：初始提示
                 reaper.ImGui_Spacing(ctx)
                 local avail_w = reaper.ImGui_GetContentRegionAvail(ctx)
-                local text = "👇 请从下方搜索 Action 或 FX 并拖入上方网格"
+                local text = i18n.t("drag_hint_no_slot")
                 local text_w = reaper.ImGui_CalcTextSize(ctx, text)
                 local pad_x = (avail_w - text_w) / 2
                 
@@ -328,7 +331,11 @@ function M.draw()
             -- 第三部分：资源浏览器
             tab_browser.draw(ctx, sector, state)
         else
-            reaper.ImGui_TextDisabled(ctx, "请从左侧预览中选择一个扇区进行编辑")
+            if i18n.get_language() == "zh" then
+                reaper.ImGui_TextDisabled(ctx, "请从左侧预览中选择一个扇区进行编辑")
+            else
+                reaper.ImGui_TextDisabled(ctx, "Please select a sector from the preview on the left to edit")
+            end
         end
         
         reaper.ImGui_EndTable(ctx)
@@ -573,17 +580,20 @@ function M.draw_preview_panel()
             -- Expansion Pixels
             reaper.ImGui_Text(ctx, "膨胀幅度:")
             reaper.ImGui_SameLine(ctx)
-            local exp_px = config.menu.hover_expansion_pixels or 10
-            local px_changed, new_px = reaper.ImGui_SliderInt(ctx, "##ExpPixels", exp_px, 0, 30, "%d px")
+            local exp_px = config.menu.hover_expansion_pixels or 4
+            -- 【修复】限制滑块上限为 10px，与渲染逻辑保持一致
+            exp_px = math.min(exp_px, 10)  -- 确保当前值不超过上限
+            local px_changed, new_px = reaper.ImGui_SliderInt(ctx, "##ExpPixels", exp_px, 0, 10, "%d px")
             if px_changed then
-                config.menu.hover_expansion_pixels = new_px
+                -- 【修复】保存时也限制最大值，确保不超过 10px
+                config.menu.hover_expansion_pixels = math.min(new_px, 10)
                 is_modified = true
             end
             
             -- Expansion Speed (Intuitive 1-10 Scale)
             reaper.ImGui_Text(ctx, "膨胀速度:")
             reaper.ImGui_SameLine(ctx)
-            local exp_spd_raw = config.menu.hover_animation_speed or 4
+            local exp_spd_raw = config.menu.hover_animation_speed or 8
             -- Convert to integer: handle old float values (0.0-1.0) or new int values (1-10)
             local exp_spd
             if type(exp_spd_raw) == "number" then
@@ -603,13 +613,7 @@ function M.draw_preview_panel()
             if spd_changed then
                 config.menu.hover_animation_speed = new_spd
                 is_modified = true
-                exp_spd = new_spd  -- Update current value for label display
             end
-            
-            -- Helper text to explain the feel
-            reaper.ImGui_SameLine(ctx)
-            local speed_label = (exp_spd < 4) and "(柔和)" or ((exp_spd > 7) and "(极速)" or "(标准)")
-            reaper.ImGui_TextDisabled(ctx, speed_label)
             
             reaper.ImGui_Unindent(ctx)
         end
@@ -1490,14 +1494,15 @@ end
 -- Phase 4 - 底部操作栏
 -- ============================================================================
 
--- 绘制底部操作栏（稳定布局）
+-- 绘制操作栏（稳定布局）
 function M.draw_action_bar()
     -- 左侧：按钮组（紧密排列）
     local save_btn_color = im_utils.color_to_u32(66, 165, 245, 200)  -- #42A5F5
     reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_Button(), save_btn_color)
     reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_ButtonHovered(), im_utils.color_to_u32(100, 181, 246, 255))
     reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_ButtonActive(), im_utils.color_to_u32(30, 136, 229, 255))
-    if reaper.ImGui_Button(ctx, "保存", 0, 0) then
+    -- 【修复】使用固定ID，避免切换语言时按钮失效
+    if reaper.ImGui_Button(ctx, i18n.t("save") .. "##ActionBarSave", 0, 0) then
         if M.save_config() then
             state.save_feedback_time = os.time()
             -- [REMOVED] MessageBox - replaced with green text feedback
@@ -1508,7 +1513,8 @@ function M.draw_action_bar()
     reaper.ImGui_SameLine(ctx, 0, 4)
     
     -- 丢弃按钮
-    if reaper.ImGui_Button(ctx, "丢弃", 0, 0) then
+    -- 【修复】使用固定ID，避免切换语言时按钮失效
+    if reaper.ImGui_Button(ctx, i18n.t("discard") .. "##ActionBarDiscard", 0, 0) then
         M.discard_changes()
     end
     
@@ -1519,7 +1525,8 @@ function M.draw_action_bar()
     reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_Button(), reset_btn_color)
     reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_ButtonHovered(), im_utils.color_to_u32(255, 112, 112, 255))
     reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_ButtonActive(), im_utils.color_to_u32(229, 57, 53, 255))
-    if reaper.ImGui_Button(ctx, "重置", 0, 0) then
+    -- 【修复】使用固定ID，避免切换语言时按钮失效
+    if reaper.ImGui_Button(ctx, i18n.t("reset") .. "##ActionBarReset", 0, 0) then
         M.reset_to_default()
     end
     reaper.ImGui_PopStyleColor(ctx, 3)
@@ -1532,6 +1539,61 @@ function M.draw_action_bar()
         save_config = M.save_config
     }
     tab_presets.draw(ctx, config, state, preset_callbacks)
+    
+    -- 【新增】右侧：语言切换按钮（简化版：直接显示 ZH/EN）
+    reaper.ImGui_SameLine(ctx, 0, 8)
+    
+    -- 语言切换按钮（自适应宽度，避免界面大小变化）
+    -- 【修复】使用固定ID，避免切换语言时按钮失效
+    local lang_display = i18n.get_language_display()
+    if reaper.ImGui_Button(ctx, lang_display .. "##ActionBarLanguage", 0, 0) then
+        local old_lang = i18n.get_language()
+        i18n.toggle_language()
+        local new_lang = i18n.get_language()
+        -- 同步状态
+        state.language = new_lang
+        
+        -- 【修复】关闭所有预设弹窗，避免切换语言时弹窗状态混乱导致操作栏失效
+        if tab_presets and tab_presets.close_all_modals then
+            tab_presets.close_all_modals()
+        end
+        
+        -- 更新扇区名称：如果扇区名称匹配 "扇区 X" 或 "Sector X" 模式，根据新语言更新
+        if config and config.sectors then
+            for i, sector in ipairs(config.sectors) do
+                if sector.name then
+                    -- 检测是否匹配 "扇区 X" 模式（中文）
+                    local zh_match = sector.name:match("^扇区 (%d+)$")
+                    if zh_match then
+                        if new_lang == "en" then
+                            sector.name = "Sector " .. zh_match
+                            state.is_modified = true
+                        end
+                    else
+                        -- 检测是否匹配 "Sector X" 模式（英文）
+                        local en_match = sector.name:match("^Sector (%d+)$")
+                        if en_match then
+                            if new_lang == "zh" then
+                                sector.name = "扇区 " .. en_match
+                                state.is_modified = true
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    -- 显示语言提示
+    if reaper.ImGui_IsItemHovered(ctx) then
+        reaper.ImGui_BeginTooltip(ctx)
+        if i18n.get_language() == "zh" then
+            reaper.ImGui_Text(ctx, "Click to switch to English")
+        else
+            reaper.ImGui_Text(ctx, "点击切换到中文")
+        end
+        reaper.ImGui_EndTooltip(ctx)
+    end
 end
 
 -- ============================================================================
@@ -1553,7 +1615,7 @@ function M.save_config()
         return true
     else
         -- Keep error message for actual failures
-        reaper.ShowMessageBox("配置保存失败", "错误", 0)
+        reaper.ShowMessageBox(i18n.t("error_save_failed"), i18n.t("error"), 0)
         return false
     end
 end
@@ -1562,8 +1624,8 @@ end
 function M.discard_changes()
     if state.is_modified then
         local result = reaper.ShowMessageBox(
-            "确定要丢弃所有未保存的更改吗？",
-            "确认",
+            i18n.t("confirm_discard_changes"),
+            i18n.t("confirm"),
             4  -- 4 = Yes/No
         )
         if result == 6 then  -- 6 = Yes
@@ -1578,8 +1640,8 @@ end
 -- 重置为默认配置
 function M.reset_to_default()
     local result = reaper.ShowMessageBox(
-        "确定要重置为默认配置吗？这将丢失所有自定义设置。",
-        "确认",
+        i18n.t("confirm_reset"),
+        i18n.t("confirm"),
         4  -- 4 = Yes/No
     )
     if result == 6 then  -- 6 = Yes
@@ -1609,7 +1671,7 @@ function M.switch_preset(preset_name)
     -- 应用预设
     local new_config, err = config_manager.apply_preset(preset_name)
     if not new_config then
-        reaper.ShowMessageBox("切换预设失败: " .. (err or "未知错误"), "错误", 0)
+        reaper.ShowMessageBox(i18n.t("error_switch_preset_failed") .. ": " .. (err or i18n.t("unknown_error")), i18n.t("error"), 0)
         return
     end
     
@@ -1645,7 +1707,7 @@ function M.save_current_preset()
     -- 保存预设（config_manager.save() 已经更新了预设，这里只是确认）
     local success, err = config_manager.save_preset(state.current_preset_name, config)
     if not success then
-        reaper.ShowMessageBox("保存预设失败: " .. (err or "未知错误"), "错误", 0)
+        reaper.ShowMessageBox(i18n.t("error_save_preset_failed") .. ": " .. (err or i18n.t("unknown_error")), i18n.t("error"), 0)
         return
     end
     
@@ -1662,14 +1724,14 @@ function M.delete_current_preset()
     
     -- 禁止删除 Default
     if state.current_preset_name == "Default" then
-        reaper.ShowMessageBox("不能删除默认预设", "错误", 0)
+        reaper.ShowMessageBox(i18n.t("error_cannot_delete_default"), i18n.t("error"), 0)
         return
     end
     
     -- 确认对话框
     local result = reaper.ShowMessageBox(
-        "确定要删除预设 \"" .. state.current_preset_name .. "\" 吗？",
-        "确认删除",
+        i18n.t("confirm_delete_preset") .. " \"" .. state.current_preset_name .. "\"?",
+        i18n.t("confirm"),
         4  -- 4 = Yes/No
     )
     
@@ -1680,7 +1742,7 @@ function M.delete_current_preset()
     -- 删除预设
     local success, err = config_manager.delete_preset(state.current_preset_name)
     if not success then
-        reaper.ShowMessageBox("删除预设失败: " .. (err or "未知错误"), "错误", 0)
+        reaper.ShowMessageBox(i18n.t("error_save_preset_failed") .. ": " .. (err or i18n.t("unknown_error")), i18n.t("error"), 0)
         return
     end
     
@@ -1694,8 +1756,8 @@ function M.draw_new_preset_modal()
     reaper.ImGui_SetNextWindowSize(ctx, 320, 160, reaper.ImGui_Cond_Appearing())
     
     -- 显示弹窗
-    if reaper.ImGui_BeginPopupModal(ctx, "新建预设", nil, reaper.ImGui_WindowFlags_None()) then
-        reaper.ImGui_Text(ctx, "请输入预设名称:")
+    if reaper.ImGui_BeginPopupModal(ctx, i18n.t("new_preset") .. "##NewPresetModalOld", nil, reaper.ImGui_WindowFlags_None()) then
+        reaper.ImGui_Text(ctx, i18n.t("enter_preset_name"))
         reaper.ImGui_Spacing(ctx)
         
         -- 输入框
@@ -1716,11 +1778,11 @@ function M.draw_new_preset_modal()
         reaper.ImGui_SetCursorPosX(ctx, button_x)
         
         -- 确认按钮
-        if reaper.ImGui_Button(ctx, "确认", button_width, 0) then
+        if reaper.ImGui_Button(ctx, i18n.t("confirm"), button_width, 0) then
             local preset_name = new_preset_name_buf:match("^%s*(.-)%s*$")  -- 去除首尾空格
             
             if preset_name == "" then
-                reaper.ShowMessageBox("预设名称不能为空", "错误", 0)
+                reaper.ShowMessageBox(i18n.t("error_preset_name_empty"), i18n.t("error"), 0)
             else
                 -- 检查名称是否已存在
                 local preset_list = config_manager.get_preset_list()
@@ -1733,7 +1795,7 @@ function M.draw_new_preset_modal()
                 end
                 
                 if name_exists then
-                    reaper.ShowMessageBox("预设名称已存在，请使用其他名称", "错误", 0)
+                    reaper.ShowMessageBox(i18n.t("error_preset_name_exists"), i18n.t("error"), 0)
                 else
                     -- 保存当前配置为新预设
                     local success, err = config_manager.save_preset(preset_name, config)
@@ -1745,7 +1807,7 @@ function M.draw_new_preset_modal()
                         new_preset_name_buf = ""
                         reaper.ImGui_CloseCurrentPopup(ctx)
                     else
-                        reaper.ShowMessageBox("保存预设失败: " .. (err or "未知错误"), "错误", 0)
+                        reaper.ShowMessageBox(i18n.t("error_save_preset_failed") .. ": " .. (err or i18n.t("unknown_error")), i18n.t("error"), 0)
                     end
                 end
             end
@@ -1754,7 +1816,7 @@ function M.draw_new_preset_modal()
         reaper.ImGui_SameLine(ctx, 0, 8)
         
         -- 取消按钮
-        if reaper.ImGui_Button(ctx, "取消", button_width, 0) then
+        if reaper.ImGui_Button(ctx, i18n.t("cancel"), button_width, 0) then
             show_new_preset_modal = false
             new_preset_name_buf = ""
             reaper.ImGui_CloseCurrentPopup(ctx)
@@ -1772,7 +1834,7 @@ function M.draw_new_preset_modal()
     
     -- 如果 show_new_preset_modal 为 true，打开弹窗
     if show_new_preset_modal then
-        reaper.ImGui_OpenPopup(ctx, "新建预设")
+        reaper.ImGui_OpenPopup(ctx, "##NewPresetModalOld")
     end
 end
 
@@ -1789,8 +1851,8 @@ end
 function M.cleanup()
     if state.is_modified then
         local result = reaper.ShowMessageBox(
-            "有未保存的更改，确定要关闭吗？",
-            "确认",
+            i18n.t("confirm_close_unsaved"),
+            i18n.t("confirm"),
             4  -- 4 = Yes/No
         )
         if result ~= 6 then  -- 6 = Yes. If user clicked "No" or closed dialog

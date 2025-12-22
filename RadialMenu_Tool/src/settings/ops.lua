@@ -88,9 +88,12 @@ function M.adjust_sector_count(config, state, removed_sector_stash, new_count)
         restored_sector.id = i
         table.insert(config.sectors, restored_sector)
       else
+        -- Use fixed English name "Sector X" to avoid language-dependent naming issues
+        -- This ensures consistent naming regardless of current language setting
+        local sector_name = "Sector " .. i
         table.insert(config.sectors, {
           id = i,
-          name = "扇区 " .. i,
+          name = sector_name,
           color = { 26, 26, 26, 180 },
           slots = {},
         })

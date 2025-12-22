@@ -25,10 +25,13 @@ function M.on_sector_click(R, sector)
     return
   end
 
+  -- 【修复】瞬间切换：点击时立即显示/隐藏子栏，不使用任何动画
   if R.clicked_sector and R.clicked_sector.id == sector.id then
+    -- 瞬间隐藏：直接设为 false，alpha = 0.0
     R.show_submenu = false
     R.clicked_sector = nil
   else
+    -- 瞬间显示：直接设为 true，alpha = 1.0
     R.clicked_sector = sector
     R.show_submenu = true
   end
@@ -119,10 +122,10 @@ function M.draw(R, should_update)
   anim.update_anim_active_policy(R, should_update, anim_scale, now)
 
   -- ============================================================
-  -- Submenu: no animation
+  -- Submenu: no animation (instant switch)
   -- ============================================================
   local is_dragging = list_view.is_dragging()
-  local sub_scale = 1.0
+  -- 【修复】sub_scale 不再使用，子栏瞬间显示/隐藏
   if is_dragging then
     R.show_submenu = true
   end
@@ -133,15 +136,18 @@ function M.draw(R, should_update)
   anim.update_sector_expansion(R, draw_config, should_update, center_x, center_y)
 
   -- ============================================================
-  -- 1) Submenu draw (below wheel)
+  -- 1) Submenu draw (below wheel) - Instant switch
   -- ============================================================
   if is_dragging and R.clicked_sector then
     R.show_submenu = true
   end
 
   local is_submenu_hovered = false
+  -- 【修复】子栏瞬间切换：如果 show_submenu 为 true，立即显示（alpha = 1.0）
+  -- 如果为 false，不绘制（相当于 alpha = 0.0）
   if R.show_submenu and R.clicked_sector then
-    is_submenu_hovered = list_view.draw_submenu(ctx, R.clicked_sector, center_x, center_y, sub_scale, draw_config)
+    -- 直接绘制，不使用任何动画参数
+    is_submenu_hovered = list_view.draw_submenu(ctx, R.clicked_sector, center_x, center_y, 1.0, draw_config)
   end
 
   -- ============================================================
@@ -165,7 +171,53 @@ function M.draw(R, should_update)
     controller.toggle_management_mode()
   end
 
-  if reaper.ImGui_IsItemActive(ctx) and reaper.ImGui_IsMouseDragging(ctx, 0) then
+  -- 检测中心手柄点击，开始拖拽状态锁定
+  if reaper.ImGui_IsItemClicked(ctx, 0) then
+    R.is_dragging_window = true
+    R.center_drag_started = true
+  end
+
+  -- 拖拽逻辑：使用状态锁定机制
+  if R.is_dragging_window then
+    -- 检查鼠标是否仍然按下
+    if not reaper.ImGui_IsMouseDown(ctx, 0) then
+      -- 鼠标释放，结束拖拽
+      R.is_dragging_window = false
+      R.center_drag_started = false
+    else
+      -- 鼠标仍然按下，继续拖拽
+      local dx, dy = reaper.ImGui_GetMouseDelta(ctx, 0)
+      if reaper.ImGui_ResetMouseDragDelta then
+        reaper.ImGui_ResetMouseDragDelta(ctx, 0)
+      end
+
+      if math.abs(dx) > 0.001 or math.abs(dy) > 0.001 then
+        local new_x = win_x + dx
+        local new_y = win_y + dy
+
+        local viewport = reaper.ImGui_GetMainViewport(ctx)
+        if viewport then
+          local vp_x, vp_y = reaper.ImGui_Viewport_GetPos(viewport)
+          local vp_w, vp_h = reaper.ImGui_Viewport_GetSize(viewport)
+
+          if new_x < vp_x then
+            new_x = vp_x
+          elseif new_x + win_w > vp_x + vp_w then
+            new_x = vp_x + vp_w - win_w
+          end
+
+          if new_y < vp_y then
+            new_y = vp_y
+          elseif new_y + win_h > vp_y + vp_h then
+            new_y = vp_y + vp_h - win_h
+          end
+        end
+
+        reaper.ImGui_SetWindowPos(ctx, new_x, new_y)
+      end
+    end
+  elseif reaper.ImGui_IsItemActive(ctx) and reaper.ImGui_IsMouseDragging(ctx, 0) then
+    -- 向后兼容：如果状态锁定未启用，使用旧的逻辑
     R.center_drag_started = true
 
     local dx, dy = reaper.ImGui_GetMouseDelta(ctx, 0)
@@ -199,7 +251,7 @@ function M.draw(R, should_update)
     end
   end
 
-  if reaper.ImGui_IsItemDeactivated(ctx) and not R.center_drag_started then
+  if reaper.ImGui_IsItemDeactivated(ctx) and not R.center_drag_started and not R.is_dragging_window then
     -- 在管理模式下，左键点击中心退出管理模式
     if R.management_mode then
       local controller = require("runtime.controller")
@@ -209,7 +261,7 @@ function M.draw(R, should_update)
     end
   end
 
-  if not reaper.ImGui_IsItemActive(ctx) then
+  if not reaper.ImGui_IsItemActive(ctx) and not R.is_dragging_window then
     R.center_drag_started = false
   end
 
@@ -220,30 +272,35 @@ function M.draw(R, should_update)
   end
 
   -- ============================================================
-  -- 4) Hover-to-open (skip in management mode)
+  -- 4) Hover-to-open (skip in management mode) - Instant switch
   -- ============================================================
   if not is_dragging and not R.management_mode then
     local hovered_id = wheel.get_hovered_sector_id()
     if draw_config.menu.hover_to_open and hovered_id then
+      -- 【修复】扇区切换时立即切换子栏，不保留淡出状态
       if not R.clicked_sector or R.clicked_sector.id ~= hovered_id then
         local sector = config_manager.get_sector_by_id(draw_config, hovered_id)
         if sector then
+          -- 立即切换：直接设置新扇区，立即显示子栏（alpha = 1.0）
           R.clicked_sector = sector
           R.show_submenu = true
+          -- 不保留任何淡出状态，直接切换
         end
       end
     end
   end
 
   -- ============================================================
-  -- 5) Auto-hide submenu (skip in management mode)
+  -- 5) Auto-hide submenu (skip in management mode) - Instant hide
   -- ============================================================
   if R.show_submenu and R.clicked_sector and not is_dragging and draw_config.menu.hover_to_open and not R.management_mode then
     local hovered_id = wheel.get_hovered_sector_id()
     local is_hovering_any_sector = (hovered_id ~= nil)
+    -- 【修复】瞬间隐藏：如果鼠标移开，立即隐藏子栏（alpha = 0.0），不保留淡出状态
     if not is_hovering_any_sector and not is_submenu_hovered then
       R.show_submenu = false
       R.clicked_sector = nil
+      -- 立即清除状态，不保留任何淡出动画
     end
   end
 

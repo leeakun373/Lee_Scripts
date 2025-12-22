@@ -12,6 +12,7 @@ local M = {}
 local math_utils = require("math_utils")
 local im_utils = require("im_utils")
 local styles = require("gui.styles")
+local i18n = require("utils.i18n")
 
 -- ============================================================================
 -- 模块状态变量
@@ -296,7 +297,7 @@ function M.draw(ctx, config, state, callbacks)
             -- 工具提示
             if reaper.ImGui_IsItemHovered(ctx) then
                 reaper.ImGui_BeginTooltip(ctx)
-                reaper.ImGui_Text(ctx, "清除扇区")
+                reaper.ImGui_Text(ctx, i18n.t("clear_sector"))
                 reaper.ImGui_EndTooltip(ctx)
             end
             
@@ -317,7 +318,7 @@ function M.draw(ctx, config, state, callbacks)
         if state.selected_sector_index and state.selected_sector_index >= 1 and state.selected_sector_index <= #config.sectors then
             local sector = config.sectors[state.selected_sector_index]
             if sector then
-                reaper.ImGui_Text(ctx, "当前扇区名称:")
+                reaper.ImGui_Text(ctx, i18n.t("current_sector_name"))
                 reaper.ImGui_SetNextItemWidth(ctx, -1) -- Full width
                 local name_buf = sector.name or ""
                 local name_changed, new_name = reaper.ImGui_InputText(ctx, "##SectorName", name_buf, 256)
@@ -327,7 +328,7 @@ function M.draw(ctx, config, state, callbacks)
                 end
             end
         else
-            reaper.ImGui_TextDisabled(ctx, "请点击上方轮盘选择一个扇区")
+            reaper.ImGui_TextDisabled(ctx, i18n.t("please_select_sector"))
         end
         
         reaper.ImGui_Spacing(ctx)
@@ -335,11 +336,11 @@ function M.draw(ctx, config, state, callbacks)
         reaper.ImGui_Spacing(ctx)
         
         -- [SECTION 2] Global Settings
-        reaper.ImGui_Text(ctx, "全局设置")
+        reaper.ImGui_Text(ctx, i18n.t("global_settings"))
         reaper.ImGui_Spacing(ctx)
         
         -- A. Sector Count (Moved to Top of Global)
-        reaper.ImGui_Text(ctx, "扇区数量:")
+        reaper.ImGui_Text(ctx, i18n.t("sector_count"))
         local sector_count = #config.sectors
         local sector_count_changed, new_count = reaper.ImGui_SliderInt(ctx, "##SectorCount", sector_count, 1, 8, "%d")
         if sector_count_changed and new_count ~= sector_count then
@@ -352,10 +353,9 @@ function M.draw(ctx, config, state, callbacks)
         reaper.ImGui_Spacing(ctx)
         
         -- B. Wheel Size
-        reaper.ImGui_TextDisabled(ctx, "轮盘尺寸")
+        reaper.ImGui_TextDisabled(ctx, i18n.t("wheel_size"))
         
-        reaper.ImGui_Text(ctx, "外半径:")
-        reaper.ImGui_SameLine(ctx)
+        reaper.ImGui_Text(ctx, i18n.t("outer_radius"))
         local outer_radius = config.menu.outer_radius or 90
         local outer_radius_changed, new_outer_radius = reaper.ImGui_SliderInt(ctx, "##OuterRadius", outer_radius, 80, 300, "%d px")
         if outer_radius_changed then
@@ -363,8 +363,7 @@ function M.draw(ctx, config, state, callbacks)
             state.is_modified = true
         end
         
-        reaper.ImGui_Text(ctx, "内半径:")
-        reaper.ImGui_SameLine(ctx)
+        reaper.ImGui_Text(ctx, i18n.t("inner_radius"))
         local inner_radius = config.menu.inner_radius or 25
         local inner_radius_changed, new_inner_radius = reaper.ImGui_SliderInt(ctx, "##InnerRadius", inner_radius, 20, 100, "%d px")
         if inner_radius_changed then
@@ -375,10 +374,9 @@ function M.draw(ctx, config, state, callbacks)
         reaper.ImGui_Spacing(ctx)
         
         -- C. Submenu Size (Stacked Vertically)
-        reaper.ImGui_TextDisabled(ctx, "子菜单尺寸")
+        reaper.ImGui_TextDisabled(ctx, i18n.t("submenu_size"))
         
-        reaper.ImGui_Text(ctx, "宽度:")
-        reaper.ImGui_SameLine(ctx)
+        reaper.ImGui_Text(ctx, i18n.t("width"))
         local slot_w = config.menu.slot_width or 65
         local w_changed, new_w = reaper.ImGui_SliderInt(ctx, "##SlotWidth", slot_w, 60, 150, "%d px")
         if w_changed then
@@ -386,8 +384,7 @@ function M.draw(ctx, config, state, callbacks)
             state.is_modified = true
         end
         
-        reaper.ImGui_Text(ctx, "高度:")
-        reaper.ImGui_SameLine(ctx)
+        reaper.ImGui_Text(ctx, i18n.t("height"))
         local slot_h = config.menu.slot_height or 25
         local h_changed, new_h = reaper.ImGui_SliderInt(ctx, "##SlotHeight", slot_h, 24, 60, "%d px")
         if h_changed then
@@ -400,14 +397,14 @@ function M.draw(ctx, config, state, callbacks)
         reaper.ImGui_Spacing(ctx)
         
         -- [SECTION 3] Interaction & Animation
-        reaper.ImGui_Text(ctx, "交互与动画")
+        reaper.ImGui_Text(ctx, i18n.t("interaction_animation"))
         reaper.ImGui_Spacing(ctx)
         
         -- 1. Master Animation Toggle
         local anim_enabled = config.menu.animation and config.menu.animation.enable
         if anim_enabled == nil then anim_enabled = true end
         
-        local anim_changed, new_anim = reaper.ImGui_Checkbox(ctx, "启用界面动画 (Master)", anim_enabled)
+        local anim_changed, new_anim = reaper.ImGui_Checkbox(ctx, i18n.t("enable_ui_animation"), anim_enabled)
         if anim_changed then
             if not config.menu.animation then config.menu.animation = {} end
             config.menu.animation.enable = new_anim
@@ -419,8 +416,7 @@ function M.draw(ctx, config, state, callbacks)
             reaper.ImGui_Indent(ctx)
             
             -- Wheel Open Duration
-            reaper.ImGui_Text(ctx, "开启动画时长:")
-            reaper.ImGui_SameLine(ctx)
+            reaper.ImGui_Text(ctx, i18n.t("open_animation_duration"))
             local dur_open = config.menu.animation.duration_open or 0.06
             local dur_changed, new_dur = reaper.ImGui_SliderDouble(ctx, "##AnimDurOpen", dur_open, 0.0, 0.5, "%.2f s")
             if dur_changed then
@@ -437,7 +433,7 @@ function M.draw(ctx, config, state, callbacks)
         local expand_enabled = config.menu.enable_sector_expansion
         if expand_enabled == nil then expand_enabled = true end -- Default true
         
-        local expand_changed, new_expand = reaper.ImGui_Checkbox(ctx, "启用扇区膨胀动画", expand_enabled)
+        local expand_changed, new_expand = reaper.ImGui_Checkbox(ctx, i18n.t("enable_sector_expansion"), expand_enabled)
         if expand_changed then
             config.menu.enable_sector_expansion = new_expand
             state.is_modified = true
@@ -447,19 +443,20 @@ function M.draw(ctx, config, state, callbacks)
             reaper.ImGui_Indent(ctx)
             
             -- Expansion Pixels
-            reaper.ImGui_Text(ctx, "膨胀幅度:")
-            reaper.ImGui_SameLine(ctx)
-            local exp_px = config.menu.hover_expansion_pixels or 10
-            local px_changed, new_px = reaper.ImGui_SliderInt(ctx, "##ExpPixels", exp_px, 0, 30, "%d px")
+            reaper.ImGui_Text(ctx, i18n.t("expansion_amount") .. ":")
+            local exp_px = config.menu.hover_expansion_pixels or 4
+            -- 【修复】限制滑块上限为 10px，与渲染逻辑保持一致
+            exp_px = math.min(exp_px, 10)  -- 确保当前值不超过上限
+            local px_changed, new_px = reaper.ImGui_SliderInt(ctx, "##ExpPixels", exp_px, 0, 10, "%d px")
             if px_changed then
-                config.menu.hover_expansion_pixels = new_px
+                -- 【修复】保存时也限制最大值，确保不超过 10px
+                config.menu.hover_expansion_pixels = math.min(new_px, 10)
                 state.is_modified = true
             end
             
             -- Expansion Speed (Intuitive 1-10 Scale)
-            reaper.ImGui_Text(ctx, "膨胀速度:")
-            reaper.ImGui_SameLine(ctx)
-            local exp_spd_raw = config.menu.hover_animation_speed or 4
+            reaper.ImGui_Text(ctx, i18n.t("expansion_speed") .. ":")
+            local exp_spd_raw = config.menu.hover_animation_speed or 8
             -- Convert to integer: handle old float values (0.0-1.0) or new int values (1-10)
             local exp_spd
             if type(exp_spd_raw) == "number" then
@@ -479,13 +476,7 @@ function M.draw(ctx, config, state, callbacks)
             if spd_changed then
                 config.menu.hover_animation_speed = new_spd
                 state.is_modified = true
-                exp_spd = new_spd  -- Update current value for label display
             end
-            
-            -- Helper text to explain the feel
-            reaper.ImGui_SameLine(ctx)
-            local speed_label = (exp_spd < 4) and "(柔和)" or ((exp_spd > 7) and "(极速)" or "(标准)")
-            reaper.ImGui_TextDisabled(ctx, speed_label)
             
             reaper.ImGui_Unindent(ctx)
         end
@@ -496,7 +487,7 @@ function M.draw(ctx, config, state, callbacks)
         
         -- 3. Interaction
         local hover_mode = config.menu.hover_to_open or false
-        local hover_changed, new_hover_mode = reaper.ImGui_Checkbox(ctx, "悬停打开子菜单", hover_mode)
+        local hover_changed, new_hover_mode = reaper.ImGui_Checkbox(ctx, i18n.t("hover_to_open"), hover_mode)
         if hover_changed then
             config.menu.hover_to_open = new_hover_mode
             state.is_modified = true

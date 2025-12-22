@@ -183,14 +183,20 @@ end
 -- @param sector table: 当前扇区
 -- @param state table: 状态对象
 function M.draw_action_browser(ctx, sector, state)
+    local i18n = require("utils.i18n")
+    
     -- Toolbar Row: [Native List] [Run] [Search Bar]
     
     -- 1. Open Native List Button (Icon style or small text)
-    if reaper.ImGui_Button(ctx, "列表", 0, 0) then
+    if reaper.ImGui_Button(ctx, i18n.t("list"), 0, 0) then
         reaper.Main_OnCommand(40605, 0) -- Show action list
     end
     if reaper.ImGui_IsItemHovered(ctx) then
-        reaper.ImGui_SetTooltip(ctx, "打开 Reaper 原生 Action List")
+        if i18n.get_language() == "zh" then
+            reaper.ImGui_SetTooltip(ctx, "打开 Reaper 原生 Action List")
+        else
+            reaper.ImGui_SetTooltip(ctx, "Open Reaper Native Action List")
+        end
     end
     
     reaper.ImGui_SameLine(ctx, 0, 4)
@@ -200,7 +206,7 @@ function M.draw_action_browser(ctx, sector, state)
     if not can_run then reaper.ImGui_BeginDisabled(ctx) end
     
     reaper.ImGui_PushStyleColor(ctx, reaper.ImGui_Col_Button(), 0x2E7D32FF)
-    if reaper.ImGui_Button(ctx, "运行", 0, 0) then
+    if reaper.ImGui_Button(ctx, i18n.t("run"), 0, 0) then
         if selected_browser_action then
             local execution = require("logic.execution")
             -- Create a temp slot object to reuse execution logic
@@ -212,7 +218,11 @@ function M.draw_action_browser(ctx, sector, state)
     
     if not can_run then reaper.ImGui_EndDisabled(ctx) end
     if reaper.ImGui_IsItemHovered(ctx) and can_run then
-        reaper.ImGui_SetTooltip(ctx, "运行选中的 Action: " .. tostring(selected_browser_action.command_id))
+        if i18n.get_language() == "zh" then
+            reaper.ImGui_SetTooltip(ctx, "运行选中的 Action: " .. tostring(selected_browser_action.command_id))
+        else
+            reaper.ImGui_SetTooltip(ctx, "Run selected Action: " .. tostring(selected_browser_action.command_id))
+        end
     end
 
     reaper.ImGui_SameLine(ctx, 0, 4)

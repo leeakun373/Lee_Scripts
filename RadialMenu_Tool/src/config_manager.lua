@@ -14,6 +14,34 @@ local json = require("json")
 local DEFAULTS = require("config_defaults")
 
 -- ============================================================================
+-- 文本处理工具
+-- ============================================================================
+
+-- 简单的文本分割（支持 \n）
+-- 从 wheel.lua 提取，用于配置预处理
+function M.split_text_into_lines(text)
+  local lines = {}
+  if not text then return lines end
+  -- 将 "\n" 替换为真实的换行符并在换行符处分割
+  for line in (text:gsub("\\n", "\n") .. "\n"):gmatch("(.-)\n") do
+    table.insert(lines, line)
+  end
+  return lines
+end
+
+-- 预处理扇区文本缓存
+local function preprocess_sector_text_cache(config)
+  if not config or not config.sectors then return end
+  
+  for _, sector in ipairs(config.sectors) do
+    if sector.name then
+      -- 预处理文本行并缓存
+      sector.cached_lines = M.split_text_into_lines(sector.name)
+    end
+  end
+end
+
+-- ============================================================================
 -- 路径
 -- ============================================================================
 
@@ -104,6 +132,16 @@ local function normalize_config(cfg)
   -- Fill missing structure
   if deep_merge_missing(cfg, DEFAULTS, { ignore_keys = INTERNAL_KEYS }) then
     changed = true
+  end
+
+  -- 【修复】限制膨胀幅度最大值为 10px，确保旧配置也会被自动修正
+  if cfg.menu and cfg.menu.hover_expansion_pixels then
+    local old_value = cfg.menu.hover_expansion_pixels
+    local clamped_value = math.min(old_value, 10)
+    if old_value ~= clamped_value then
+      cfg.menu.hover_expansion_pixels = clamped_value
+      changed = true
+    end
   end
 
   -- Never persist internal keys
@@ -315,6 +353,16 @@ local function load_full_config()
     if changed then dirty = true end
   end
 
+  -- 预处理所有预设的文本缓存
+  for name, preset_cfg in pairs(full_config.presets) do
+    if type(preset_cfg) == "table" then
+      preprocess_sector_text_cache(preset_cfg)
+    end
+  end
+  
+  -- 预处理 active_config 的文本缓存
+  preprocess_sector_text_cache(full_config.active_config)
+
   -- Save silently if we had to补全/迁移
   if dirty then
     persist_full_config(full_config)
@@ -329,7 +377,16 @@ end
 
 function M.load()
   local full_config = load_full_config()
-  return full_config.active_config
+  local config = full_config.active_config
+  -- 确保文本缓存已创建（向后兼容）
+  if config and config.sectors then
+    for _, sector in ipairs(config.sectors) do
+      if sector.name and not sector.cached_lines then
+        sector.cached_lines = M.split_text_into_lines(sector.name)
+      end
+    end
+  end
+  return config
 end
 
 function M.save(config)
@@ -341,6 +398,9 @@ function M.save(config)
     reaper.ShowMessageBox("配置验证失败: " .. error_msg, "错误", 0)
     return false
   end
+
+  -- 预处理文本缓存
+  preprocess_sector_text_cache(normalized)
 
   local full_config = load_full_config()
 
@@ -383,7 +443,7 @@ function M.create_blank_config()
   cfg.sectors = {
     {
       id = 1,
-      name = "Main",
+      name = "Sector 1",  -- 使用固定格式，避免语言依赖
       icon = default_sector_icon,
       color = M.deep_copy_config(default_sector_color),
       slots = slots,
@@ -515,6 +575,9 @@ function M.apply_preset(name)
 
   full_config.active_config = M.deep_copy_config(full_config.presets[name])
   full_config.current_preset_name = name
+  
+  -- 确保文本缓存已创建
+  preprocess_sector_text_cache(full_config.active_config)
 
   local success, err = persist_full_config(full_config)
   if not success then

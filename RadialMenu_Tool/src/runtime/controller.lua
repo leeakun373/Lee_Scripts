@@ -28,6 +28,7 @@ local R = {
   show_submenu = false,
   is_pinned = false,
   center_drag_started = false,
+  is_dragging_window = false,
 
   is_first_display = true,
 

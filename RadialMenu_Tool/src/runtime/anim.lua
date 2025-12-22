@@ -86,16 +86,23 @@ function M.update_sector_expansion(R, config, should_update, center_x, center_y)
     for _, sector in ipairs(config.sectors) do
       local id = sector.id
       local current_val = R.sector_anim_states[id] or 0.0
-      local target_val = 0.0
+      local target_val = 0.0  -- 【关键】默认必须是 0
 
+      -- 【修复1：关闭功能时强制重置】必须要有 else，否则会残留状态
       if expansion_enabled then
         local is_active_submenu = (R.show_submenu and R.clicked_sector and R.clicked_sector.id == id)
         if (id == current_hover_id) or is_active_submenu then
           target_val = 1.0
+        else
+          -- 鼠标未悬停且未激活子菜单时，目标值强制为 0
+          target_val = 0.0
         end
+      else
+        -- 【修复1：关闭动画时，强制目标值为 0，清除残留状态】
+        target_val = 0.0
       end
 
-      local speed_level_raw = config.menu.hover_animation_speed or 4
+      local speed_level_raw = config.menu.hover_animation_speed or 8
       local speed_level
       if type(speed_level_raw) == "number" then
         if speed_level_raw < 1 then

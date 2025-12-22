@@ -63,11 +63,9 @@ end
 function M.draw_submenu(ctx, sector_data, center_x, center_y, anim_scale, config)
     if not sector_data or not config then return false end  -- Return false if no sector data or config
 
-    -- 子菜单不使用任何淡入/动画（anim_scale 保留参数以兼容旧调用，但不再使用）
+    -- 【修复】子菜单瞬间切换，不使用任何动画
+    -- anim_scale 参数保留以兼容旧调用，但完全忽略
     current_sector = sector_data
-    
-    -- [REVERTED] 移除 Pop 动画。使用固定大小和位置。
-    -- 这里也不再使用 anim_scale 做背景淡入，以避免性能损耗和不同渲染后端的观感差异。
     
     -- 获取插槽数量
     local slot_count = sector_data.slots and #sector_data.slots or 0
@@ -84,8 +82,8 @@ function M.draw_submenu(ctx, sector_data, center_x, center_y, anim_scale, config
     -- 3. 动态大小（从配置读取）
     reaper.ImGui_SetNextWindowSize(ctx, win_w, win_h, reaper.ImGui_Cond_Always())
     
-    -- 4. 固定背景透明度（不随动画变化）
-    reaper.ImGui_SetNextWindowBgAlpha(ctx, 0.95)
+    -- 4. 【修复】瞬间显示：背景透明度直接设为 1.0（完全不透明），不使用任何动画
+    reaper.ImGui_SetNextWindowBgAlpha(ctx, 1.0)
     
     -- 3. 样式设置 (深色背景容器)
     
