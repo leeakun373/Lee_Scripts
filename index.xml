@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="9fad8cc51eb3f4623dc8c9c8226163ca619ba9d7" name="Lee_Scripts">
+<index version="1" commit="b41f440c190aaf381beac8ca5af94a306da9bf18" name="Lee_Scripts">
   <category name="FX/FXMiner">
     <reapack name="Lee_FXMiner - Browser.lua" type="script" desc="Lee_FXMiner - Browser">
       <metadata>
@@ -660,6 +660,22 @@
         <source file="utils/json.lua">https://github.com/leeakun373/Lee_Scripts/raw/9fad8cc51eb3f4623dc8c9c8226163ca619ba9d7/RadialMenu_Tool/utils/json.lua</source>
         <source file="utils/math_utils.lua">https://github.com/leeakun373/Lee_Scripts/raw/9fad8cc51eb3f4623dc8c9c8226163ca619ba9d7/RadialMenu_Tool/utils/math_utils.lua</source>
         <source file="utils/utils_fx.lua">https://github.com/leeakun373/Lee_Scripts/raw/9fad8cc51eb3f4623dc8c9c8226163ca619ba9d7/RadialMenu_Tool/utils/utils_fx.lua</source>
+      </version>
+    </reapack>
+  </category>
+  <category name="Shared">
+    <reapack name="Lee_UI - Demo.lua" type="script" desc="Lee_UI - Demo (entry)">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 \u20837 ?\u21475 ?\u33050 ?\u26412 ?\u65306 ?\u36716 ?\u21040 ? Shared/Toolbox \u20013 ?\u30340 ? Demo\u12290 ?\par}
+}
+]]></description>
+      </metadata>
+      <version name="0.2" author="Lee" time="2025-12-22T17:50:27Z">
+        <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/b41f440c190aaf381beac8ca5af94a306da9bf18/Shared/Lee_UI%20-%20Demo.lua</source>
       </version>
     </reapack>
   </category>
