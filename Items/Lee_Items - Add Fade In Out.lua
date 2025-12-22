@@ -61,7 +61,3 @@ reaper.UpdateArrange()
 -- 结束撤销组
 reaper.PreventUIRefresh(-1)
 reaper.Undo_EndBlock("Add 0.2s fade in/out to selected items", -1)
-
-
-
-

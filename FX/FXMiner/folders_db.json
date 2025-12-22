@@ -1,22 +1,16 @@
 {
-  "next_id": 19,
   "folders_by_id": {
-    "17": {
-      "name": "New folder",
-      "parent_id": 0,
-      "sort": 1,
-      "id": 17
-    },
     "0": {
+      "id": 0,
       "name": "Root",
-      "sort": 0,
-      "id": 0
+      "sort": 0
     },
-    "18": {
-      "name": "New folder",
-      "parent_id": 17,
+    "19": {
       "sort": 1,
-      "id": 18
+      "id": 19,
+      "parent_id": 0,
+      "name": "New folder"
     }
-  }
+  },
+  "next_id": 20
 }
