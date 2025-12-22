@@ -157,7 +157,9 @@ function TeamSync.init(DB)
   end
 
   -- Get all entries from team database
-  function DB:get_team_entries(team_db_path)
+  -- opts.filter_missing: if true, filter out entries where file doesn't exist
+  function DB:get_team_entries(team_db_path, opts)
+    opts = opts or {}
     if not team_db_path or team_db_path == "" then
       return {}
     end
@@ -165,6 +167,21 @@ function TeamSync.init(DB)
     local data, _ = self:load_team_db(team_db_path)
     if not data or type(data.entries) ~= "table" then
       return {}
+    end
+
+    -- If filter_missing is enabled, filter out entries where file doesn't exist
+    if opts.filter_missing and self.cfg and self.cfg.TEAM_PUBLISH_PATH then
+      local team_path = self.cfg.TEAM_PUBLISH_PATH
+      local filtered = {}
+      for _, entry in ipairs(data.entries) do
+        if entry and entry.filename then
+          local file_path = Utils.path_join(team_path, entry.filename)
+          if Utils.file_exists(file_path) then
+            filtered[#filtered + 1] = entry
+          end
+        end
+      end
+      return filtered
     end
 
     return data.entries
@@ -476,7 +493,12 @@ function TeamSync.init(DB)
               stats.errors[#stats.errors + 1] = "Cannot read from server: " .. filename
             end
           else
-            stats.errors[#stats.errors + 1] = "Server file missing: " .. filename
+            -- Server file missing: remove from database (with lock)
+            stats.errors[#stats.errors + 1] = "Server file missing: " .. filename .. " (removed from DB)"
+            -- Remove entry from team database
+            pcall(function()
+              self:remove_team_entry_locked(team_path, team_db_path, filename)
+            end)
           end
         else
           -- Case B: File exists locally (either in download dir or elsewhere)
@@ -524,6 +546,137 @@ function TeamSync.init(DB)
     end
 
     return true, msg, stats
+  end
+
+  -- Remove a single entry from team database (with lock)
+  function DB:remove_team_entry_locked(team_path, team_db_path, filename)
+    if not team_path or team_path == "" or not team_db_path or team_db_path == "" then
+      return false, "Team path or DB path not configured"
+    end
+
+    if not filename or filename == "" then
+      return false, "Filename not provided"
+    end
+
+    -- Step 1: Force release stale locks
+    self:force_release_stale_lock(team_path, 120)
+
+    -- Step 2: Acquire lock
+    local lock_ok, lock_err = self:acquire_lock(team_path)
+    if not lock_ok then
+      return false, lock_err
+    end
+
+    -- Use pcall to ensure lock is released even on error
+    local success, result_msg = pcall(function()
+      -- Step 3: Read remote DB
+      local data, err = self:load_team_db(team_db_path)
+      if not data then
+        error("Failed to read team DB: " .. tostring(err))
+      end
+
+      data.entries = data.entries or {}
+
+      -- Step 4: Find and remove entry
+      local found_idx = nil
+      for i, e in ipairs(data.entries) do
+        if e and e.filename == filename then
+          found_idx = i
+          break
+        end
+      end
+
+      if found_idx then
+        -- Remove entry
+        table.remove(data.entries, found_idx)
+
+        -- Step 5: Write back to remote DB
+        local ok, save_err = self:save_team_db(team_db_path, data)
+        if not ok then
+          error("Failed to save team DB: " .. tostring(save_err))
+        end
+
+        return "Removed entry: " .. filename
+      else
+        return "Entry not found: " .. filename
+      end
+    end)
+
+    -- Step 6: Always release lock
+    self:release_lock(team_path)
+
+    if success then
+      return true, result_msg
+    else
+      return false, tostring(result_msg)
+    end
+  end
+
+  -- Clean team database: remove all entries where files don't exist
+  function DB:clean_team_db(team_path, team_db_path)
+    if not team_path or team_path == "" or not team_db_path or team_db_path == "" then
+      return false, "Team path or DB path not configured", nil
+    end
+
+    local stats = {
+      removed = 0,
+      kept = 0,
+      errors = {},
+    }
+
+    -- Step 1: Force release stale locks
+    self:force_release_stale_lock(team_path, 120)
+
+    -- Step 2: Acquire lock
+    local lock_ok, lock_err = self:acquire_lock(team_path)
+    if not lock_ok then
+      return false, lock_err, stats
+    end
+
+    -- Use pcall to ensure lock is released even on error
+    local success, result_msg = pcall(function()
+      -- Step 3: Read remote DB
+      local data, err = self:load_team_db(team_db_path)
+      if not data then
+        error("Failed to read team DB: " .. tostring(err))
+      end
+
+      data.entries = data.entries or {}
+
+      -- Step 4: Filter entries - keep only those where file exists
+      local cleaned_entries = {}
+      for _, entry in ipairs(data.entries) do
+        if entry and entry.filename then
+          local file_path = Utils.path_join(team_path, entry.filename)
+          if Utils.file_exists(file_path) then
+            cleaned_entries[#cleaned_entries + 1] = entry
+            stats.kept = stats.kept + 1
+          else
+            stats.removed = stats.removed + 1
+          end
+        end
+      end
+
+      data.entries = cleaned_entries
+
+      -- Step 5: Write back to remote DB
+      local ok, save_err = self:save_team_db(team_db_path, data)
+      if not ok then
+        error("Failed to save team DB: " .. tostring(save_err))
+      end
+
+      local msg = string.format("Removed: %d, Kept: %d", stats.removed, stats.kept)
+      return msg
+    end)
+
+    -- Step 6: Always release lock
+    self:release_lock(team_path)
+
+    if success then
+      return true, result_msg, stats
+    else
+      return false, tostring(result_msg), stats
+    end
   end
 
   -- Full sync (bidirectional)

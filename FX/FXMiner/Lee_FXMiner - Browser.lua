@@ -1,7 +1,13 @@
 -- @description Lee_FXMiner - Browser
 -- @author Lee
--- @version 2.0.1
+-- @version 2.0.2
 -- @changelog
+--   + Fixed team DB path configuration: added get_team_db_path() helper function
+--   + Added automatic cleanup of missing team files from database during sync
+--   + Added team database cleanup function to remove orphaned entries
+--   + Added filter_missing option to get_team_entries() to hide deleted files
+--   + Auto-cleanup team database on Refresh button click
+--   + Fixed debug_team_sync.lua module loading (use db.db instead of db)
 --   + Added plugin availability check in Chain Preview (red highlight for missing plugins)
 --   + Improved drag & drop: auto-create new track when dropping to empty area
 --   + Fixed Inspector not updating when selecting chains in Team mode

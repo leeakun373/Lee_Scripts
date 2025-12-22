@@ -18,7 +18,7 @@ end
 
 local state = {
   name = "",
-  -- Virtual folder (in DB)
+  -- Virtual folder (in DB
   virtual_folder_id = 0,
   -- Dynamic fields (from config_fields.json)
   field_inputs = {},
@@ -139,7 +139,16 @@ local function do_publish_to_team(source_path, metadata, opts)
   opts = opts or {}
   
   local team_path = Config.TEAM_PUBLISH_PATH
-  local team_db_path = (Config.get_team_db_path and Config.get_team_db_path()) or Config.TEAM_DB_PATH
+  local team_db_path = nil
+  
+  -- Try to get team DB path using multiple methods
+  if Config.get_team_db_path then
+    team_db_path = Config.get_team_db_path()
+  elseif Config.TEAM_DB_PATH and Config.TEAM_DB_PATH ~= "" then
+    team_db_path = Config.TEAM_DB_PATH
+  elseif Config.path_join and Config.TEAM_PUBLISH_PATH then
+    team_db_path = Config.path_join(Config.TEAM_PUBLISH_PATH, "server_db.json")
+  end
   
   if not team_path or team_path == "" then 
     return false, "Team path not configured. Please set it in Browser Settings." 
@@ -227,8 +236,9 @@ local function draw_conflict_modal(ctx)
   end
 
   local popup_flags = 0
+  -- WindowFlags_AlwaysAutoResize is a constant (number), not a function
   if ImGui.WindowFlags_AlwaysAutoResize then
-    popup_flags = ImGui.WindowFlags_AlwaysAutoResize()
+    popup_flags = ImGui.WindowFlags_AlwaysAutoResize
   end
 
   if ImGui.BeginPopupModal(ctx, "Publish Conflict", nil, popup_flags) then

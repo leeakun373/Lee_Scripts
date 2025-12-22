@@ -1,6 +1,10 @@
 -- @description Lee_FXMiner - Saver
 -- @author Lee
--- @version 2.0.1
+-- @version 2.0.2
+-- @changelog
+--   + Fixed team DB path configuration: added get_team_db_path() helper function
+--   + Fixed WindowFlags_AlwaysAutoResize usage (constant, not function)
+--   + Improved team publish error handling and path validation
 -- @about Save selected track FX Chain into FXChains with shadow DB
 -- @noindex
 

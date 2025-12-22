@@ -24,7 +24,7 @@ msg("Script Path: " .. script_path)
 -- 2. 尝试加载模块
 msg("\n[Step 1] Loading Modules...")
 local status_cfg, Config = pcall(require, "config")
-local status_db, DB = pcall(require, "db")
+local status_db, DB = pcall(require, "db.db")
 
 if not status_cfg then 
   msg("❌ ERROR: Could not load 'config.lua'. Check file structure.")

@@ -35,4 +35,17 @@ M.layout = {
   preview_width = 250     -- 最右预览
 }
 
+-- Team DB path helper function
+-- Derives team DB path from TEAM_PUBLISH_PATH
+function M.get_team_db_path()
+  if M.TEAM_PUBLISH_PATH and M.TEAM_PUBLISH_PATH ~= "" then
+    return M.path_join(M.TEAM_PUBLISH_PATH, "server_db.json")
+  end
+  -- Fallback to explicit TEAM_DB_PATH if set
+  if M.TEAM_DB_PATH and M.TEAM_DB_PATH ~= "" then
+    return M.TEAM_DB_PATH
+  end
+  return nil
+end
+
 return M

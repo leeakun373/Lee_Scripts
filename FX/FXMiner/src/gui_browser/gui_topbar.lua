@@ -135,7 +135,8 @@ function Topbar.draw(ctx)
         team_db_path = Config.path_join(Config.TEAM_PUBLISH_PATH, "server_db.json")
       end
       if team_db_path and team_db_path ~= "" then
-        state.team_entries = DB:get_team_entries(team_db_path) or {}
+        -- Get team entries (with filter to hide missing files)
+        state.team_entries = DB:get_team_entries(team_db_path, { filter_missing = true }) or {}
         state.team_last_sync = os.time()
       end
     end
@@ -165,10 +166,18 @@ function Topbar.draw(ctx)
         team_db_path = Config.path_join(Config.TEAM_PUBLISH_PATH, "server_db.json")
       end
       if team_db_path and team_db_path ~= "" then
-        state.team_entries = DB:get_team_entries(team_db_path) or {}
+        -- Clean team database: remove entries where files don't exist
+        local clean_ok, clean_msg, clean_stats = DB:clean_team_db(Config.TEAM_PUBLISH_PATH, team_db_path)
+        if clean_ok and clean_stats and clean_stats.removed > 0 then
+          state.status = "Refreshed. Cleaned team DB: " .. tostring(clean_msg)
+        end
+        -- Get team entries (with filter to hide missing files)
+        state.team_entries = DB:get_team_entries(team_db_path, { filter_missing = true }) or {}
       end
     end
-    state.status = "Refreshed"
+    if not team_enabled or state.status == "Refreshing..." then
+      state.status = "Refreshed"
+    end
   end
 
   ImGui.SameLine(ctx, nil, 20)
@@ -253,7 +262,8 @@ function Topbar.draw(ctx)
               )
 
               if ok then
-                state.team_entries = DB:get_team_entries(team_db_path)
+                -- Get team entries (with filter to hide missing files)
+                state.team_entries = DB:get_team_entries(team_db_path, { filter_missing = true }) or {}
                 state.team_last_sync = os.time()
                 state.team_sync_status = "✓ " .. tostring(msg)
                 state.status = "Sync success: " .. tostring(msg)
@@ -329,9 +339,9 @@ function Topbar.draw(ctx)
             end
           end
 
-          -- Refresh team entries
+          -- Refresh team entries (with filter to hide missing files)
           if team_db_path then
-            state.team_entries = DB:get_team_entries(team_db_path)
+            state.team_entries = DB:get_team_entries(team_db_path, { filter_missing = true }) or {}
           end
 
           if fail_count == 0 then
