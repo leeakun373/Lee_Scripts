@@ -16,22 +16,33 @@
    - 确认提交信息清晰明确
 
 2. **提交信息格式**:
-   - 使用中文简体
-   - 格式: `类型: 简短描述`
-   - 类型: feat/fix/docs/refactor/style/test
-   - 示例: `feat: 添加新的 Marker 工作站功能`
+   - 优先使用英文（GitHub 标准），也可使用中文简体
+   - 格式: `类型: 简短描述` 或 `类型: 简短描述\n\n详细说明`
+   - 类型: feat/fix/docs/refactor/style/test/perf
+   - 示例: 
+     - `feat: Add new Marker workstation feature`
+     - `fix: 修复按钮失效问题`
+     - `Release v1.1.8: Full internationalization support`
 
 3. **推送前必须**:
-   - 先执行 `git pull` 确保同步
+   - 先执行 `git pull origin master --no-edit` 确保同步
    - 检查是否有冲突
+   - 如果有合并提交，确认合并正确
    - 确认所有修改都已提交
 
 4. **自动执行的操作**:
    - 当用户明确要求提交时，自动执行:
-     - `git add .`
+     - `git add [文件路径]` 或 `git add .`（根据用户需求）
      - `git commit -m "提交信息"`
-     - `git push origin master`
+     - `git pull origin master --no-edit`（先拉取远程更改）
+     - `git push origin master`（推送）
    - 如果推送失败，提供解决方案
+   - 如果 pull 后有冲突，帮助解决冲突后再推送
+
+5. **PowerShell 命令语法**:
+   - 使用分号 `;` 连接多个命令，不使用 `&&`
+   - 示例: `cd "path"; git status` 而不是 `cd "path" && git status`
+   - 对于需要切换目录的操作，使用: `cd "path"; [命令]`
 
 5. **分支管理**:
    - 默认使用 `master` 分支
@@ -106,9 +117,10 @@
 - 显示当前分支信息
 
 ### 当用户说"同步"、"拉取"时:
-- 执行 `git pull origin master`
+- 执行 `git pull origin master --no-edit`
 - 检查是否有冲突
 - 如有冲突，提供解决方案
+- 如果有合并提交，确认合并正确
 
 ## 注意事项
 
@@ -121,10 +133,12 @@
 ## 错误处理
 
 ### 如果推送失败:
-1. 检查网络连接
-2. 检查身份验证（可能需要 PAT token）
-3. 检查是否有冲突需要解决
-4. 提供具体的解决方案
+1. 先执行 `git pull origin master --no-edit` 拉取远程更改
+2. 如果有冲突，解决冲突后再次提交
+3. 检查网络连接
+4. 检查身份验证（可能需要 PAT token）
+5. 如果远程有新的提交，pull 后会自动合并，然后再次推送
+6. 提供具体的解决方案
 
 ### 如果有冲突:
 1. 显示冲突文件
@@ -135,6 +149,7 @@
 ---
 
 **配置日期**: 2024-11-18
+**最后更新**: 2025-12-19
 **适用版本**: Cursor AI 所有版本
 
 
