@@ -160,8 +160,8 @@ function M.draw_sector(draw_list, ctx, center_x, center_y, sector, index, total_
     M.draw_sector_border_line(draw_list, center_x, center_y, inner_radius, outer_radius, 
                               draw_start, draw_end, styles.sizes.gap_size or 3.0)
     
-    -- 绘制文本
-    local text_radius = outer_radius * (styles.sizes.text_radius_ratio or 0.65)
+    -- 绘制文本（使用扇环几何中心，确保文字永远在正中央）
+    local text_radius = (inner_radius + outer_radius) / 2
     M.draw_sector_text(draw_list, ctx, center_x, center_y, text_radius, start_angle, end_angle, sector, should_highlight)
 end
 
@@ -322,28 +322,56 @@ function M.draw_sector_arc(draw_list, center_x, center_y, inner_radius, outer_ra
     end
 end
 
--- 绘制扇区文本 (高保真版本，带阴影和状态颜色)
+-- ============================================================================
+-- 纯文本绘制优化 (无 Icon，几何居中)
+-- ============================================================================
+
+-- 辅助：简单的文本分割（支持 \n）
+local function split_text_into_lines(text)
+    local lines = {}
+    if not text then return lines end
+    -- 将 "\n" 替换为真实的换行符并在换行符处分割
+    for line in (text:gsub("\\n", "\n") .. "\n"):gmatch("(.-)\n") do
+        table.insert(lines, line)
+    end
+    return lines
+end
+
+-- 绘制扇区文本
 function M.draw_sector_text(draw_list, ctx, center_x, center_y, text_radius, start_angle, end_angle, sector, is_active)
     local center_angle = (start_angle + end_angle) / 2
     local tx, ty = math_utils.polar_to_cartesian(center_angle, text_radius)
-    local display_text = (sector.name or "")
     
-    -- 使用状态颜色（使用修正的颜色打包函数）
+    local name_text = sector.name or ""
+    local lines = split_text_into_lines(name_text)
+    
+    -- 颜色配置
     local text_color = is_active and 
         styles.correct_rgba_to_u32(styles.colors.text_active) or 
         styles.correct_rgba_to_u32(styles.colors.text_normal)
     local shadow_color = styles.correct_rgba_to_u32(styles.colors.text_shadow)
     
-    -- 计算文本尺寸
-    local text_size = reaper.ImGui_CalcTextSize(ctx, display_text)
-    local text_x = center_x + tx - text_size / 2
-    local text_y = center_y + ty - text_size / 2
+    -- 计算总高度以进行垂直居中
+    local line_height = reaper.ImGui_GetTextLineHeight(ctx)
+    local total_height = #lines * line_height
     
-    -- 绘制阴影
-    reaper.ImGui_DrawList_AddText(draw_list, text_x + 1, text_y + 1, shadow_color, display_text)
+    -- 计算起始坐标
+    local cursor_x = center_x + tx
+    local cursor_y = center_y + ty - (total_height / 2)
     
-    -- 绘制文本
-    reaper.ImGui_DrawList_AddText(draw_list, text_x, text_y, text_color, display_text)
+    -- 绘制每一行
+    for _, line in ipairs(lines) do
+        if line ~= "" then
+            local text_w = reaper.ImGui_CalcTextSize(ctx, line)
+            local text_x = cursor_x - (text_w / 2)
+            
+            -- 阴影
+            reaper.ImGui_DrawList_AddText(draw_list, text_x + 1, cursor_y + 1, shadow_color, line)
+            -- 本体
+            reaper.ImGui_DrawList_AddText(draw_list, text_x, cursor_y, text_color, line)
+        end
+        cursor_y = cursor_y + line_height
+    end
 end
 
 -- ============================================================================

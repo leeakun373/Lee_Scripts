@@ -60,6 +60,10 @@ local R = {
 
   -- context tracking
   last_valid_context = -1,
+
+  -- management mode
+  management_mode = false,
+  management_config = nil,
 }
 
 local IDLE_FPS = 20
@@ -287,15 +291,26 @@ function M.loop()
     R.idle_frame_accumulator = 0
   end
 
-  reaper.ImGui_PushStyleVar(R.ctx, reaper.ImGui_StyleVar_WindowBorderSize(), 0.0)
+  -- Save context to local variable in case it gets destroyed during draw
+  local ctx = R.ctx
+  if not ctx then return end
 
-  local visible, open = reaper.ImGui_Begin(R.ctx, "Radial Menu", true, window_flags)
+  reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_WindowBorderSize(), 0.0)
+
+  local visible, open = reaper.ImGui_Begin(ctx, "Radial Menu", true, window_flags)
   if visible then
     draw.draw(R, should_update)
   end
-  reaper.ImGui_End(R.ctx)
-
-  reaper.ImGui_PopStyleVar(R.ctx)
+  
+  -- Always call ImGui_End if Begin was called, using saved context
+  -- This ensures proper pairing even if R.ctx was set to nil during draw
+  if visible then
+    reaper.ImGui_End(ctx)
+  end
+  
+  -- Always pop style var to match the push, using saved context
+  -- This ensures proper pairing even if R.ctx was set to nil during draw
+  reaper.ImGui_PopStyleVar(ctx)
 
   if queued_slot then
     local slot_to_exec = queued_slot
@@ -343,6 +358,131 @@ function M.cleanup(opts)
       reaper.ImGui_DestroyContext(R.ctx)
     end
     R.ctx = nil
+  end
+end
+
+-- ============================================================================
+-- Management Mode Functions
+-- ============================================================================
+
+function M.generate_management_config()
+  local presets = config_manager.get_preset_list()
+  local current_preset = config_manager.get_current_preset_name()
+
+  local sectors = {}
+
+  -- 1. Setup 扇区：纯文字
+  table.insert(sectors, {
+    id = "sys_setup",
+    name = "Setup",
+    color = {200, 50, 50, 255}, -- 红色高亮
+    slots = {} -- 空槽位，仅作为按钮
+  })
+
+  -- 2. 预设扇区：纯文字
+  for i, name in ipairs(presets) do
+    local is_current = (name == current_preset)
+    -- 当前选中的预设用方括号标识，或仅依靠颜色区分
+    local display_name = name
+    if is_current then 
+      display_name = "[ " .. name .. " ]"
+    end
+    
+    table.insert(sectors, {
+      id = "preset:" .. name,
+      name = display_name,
+      -- 当前预设用绿色，其他用灰色
+      color = is_current and {50, 200, 100, 255} or {100, 100, 100, 255},
+      slots = {}
+    })
+  end
+
+  -- 构造虚拟 Config 对象，保留原有的 menu 几何设置
+  return {
+    menu = R.config.menu, -- 复用半径设置
+    sectors = sectors,
+    colors = R.config.colors -- 复用全局颜色
+  }
+end
+
+function M.toggle_management_mode()
+  R.management_mode = not R.management_mode
+  R.clicked_sector = nil -- 清除子菜单状态
+  R.show_submenu = false
+
+  if R.management_mode then
+    R.management_config = M.generate_management_config()
+  else
+    R.management_config = nil
+  end
+end
+
+function M.open_setup_script()
+  -- 计算 Setup 脚本的绝对路径
+  -- 从当前文件 (controller.lua) 的位置推导根目录
+  local source_path = debug.getinfo(1, "S").source
+  source_path = source_path:match("@?(.*)")
+  -- 去掉文件名，得到 src/runtime/ 目录路径
+  local runtime_dir = source_path:match("(.*[\\/])")
+  -- 去掉 src/runtime/ 部分，得到根目录（使用匹配方式更可靠）
+  local root_path
+  if runtime_dir:match("[\\/]src[\\/]runtime[\\/]$") then
+    root_path = runtime_dir:match("(.*)[\\/]src[\\/]runtime[\\/]$")
+  elseif runtime_dir:match("[\\/]src[\\/]$") then
+    root_path = runtime_dir:match("(.*)[\\/]src[\\/]$")
+  else
+    -- fallback: 假设从 runtime 往上两级
+    root_path = runtime_dir:match("(.*[\\/])[^\\/]+[\\/]$")
+    if root_path then
+      root_path = root_path:match("(.*[\\/])[^\\/]+[\\/]$")
+    end
+  end
+  if not root_path then
+    reaper.MB("无法确定脚本根目录路径", "错误", 0)
+    return
+  end
+  -- 确保路径以分隔符结尾
+  local sep = runtime_dir:match("([\\/])") or "/"
+  if not root_path:match("[\\/]$") then
+    root_path = root_path .. sep
+  end
+  local setup_path = root_path .. "Lee_RadialMenu_Setup.lua"
+
+  -- 使用 AddRemoveReaScript 自动注册并获取 Command ID
+  -- 如果脚本已在 Action List，返回现有 ID；如果没有，自动注册并返回新 ID
+  local command_id = reaper.AddRemoveReaScript(true, 0, setup_path, true)
+
+  if command_id and command_id > 0 then
+    reaper.Main_OnCommand(command_id, 0)
+    -- 启动 Setup 后，关闭当前的轮盘，避免绘图冲突
+    M.cleanup()
+  else
+    reaper.MB("无法自动启动设置脚本，请手动在 Action List 中运行 Lee_RadialMenu_Setup.lua", "错误", 0)
+  end
+end
+
+function M.handle_management_click(sector_id)
+  if sector_id == "sys_setup" then
+    -- 打开设置脚本
+    M.open_setup_script()
+
+  elseif sector_id:match("^preset:") then
+    local preset_name = sector_id:match("^preset:(.+)")
+    if preset_name then
+      -- 切换预设
+      local new_config = config_manager.apply_preset(preset_name)
+      if new_config then
+        R.config = new_config
+        styles.init_from_config(R.config) -- 刷新样式
+
+        -- 视觉反馈：退出管理模式并重置动画状态
+        R.management_mode = false
+        R.management_config = nil
+
+        -- 重置动画状态让用户感觉到刷新
+        R.anim_open_start_time = reaper.time_precise()
+      end
+    end
   end
 end
 

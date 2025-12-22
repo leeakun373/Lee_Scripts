@@ -80,6 +80,7 @@ function M.init()
         return false
     end
     
+    
     -- 加载配置
     config = config_manager.load()
     if not config then

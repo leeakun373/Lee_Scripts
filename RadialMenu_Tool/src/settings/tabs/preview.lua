@@ -109,22 +109,42 @@ local function draw_simple_preview(draw_list, ctx, center_x, center_y, preview_c
                 reaper.ImGui_DrawList_AddLine(draw_list, center_x + x1, center_y + y1, center_x + x2, center_y + y2, rim_color, 2.0)
             end
         end
-        -- 绘制文本
-        local text_radius = outer_radius * (styles.sizes.text_radius_ratio or 0.65)
+        -- 绘制文本（支持多行，几何居中）
+        local text_radius = (inner_radius + outer_radius) / 2
         local center_angle = (start_angle + end_angle) / 2
         local tx, ty = math_utils.polar_to_cartesian(center_angle, text_radius)
-        local display_text = (sector.name or "")
+        
+        local name_text = sector.name or ""
+        
+        -- 分割文本为多行（支持 \n）
+        local lines = {}
+        if name_text then
+            for line in (name_text:gsub("\\n", "\n") .. "\n"):gmatch("(.-)\n") do
+                table.insert(lines, line)
+            end
+        end
         
         local text_color = is_selected and styles.correct_rgba_to_u32(styles.colors.text_active) or styles.correct_rgba_to_u32(styles.colors.text_normal)
         local shadow_color = styles.correct_rgba_to_u32(styles.colors.text_shadow)
         
-        local text_w, text_h = reaper.ImGui_CalcTextSize(ctx, display_text)
-        local text_x = center_x + tx - text_w / 2
-        local text_y = center_y + ty - text_h / 2
+        -- 计算尺寸布局
+        local line_height = reaper.ImGui_GetTextLineHeight(ctx)
+        local total_height = #lines * line_height
         
-        -- 绘制阴影和文本
-        reaper.ImGui_DrawList_AddText(draw_list, text_x + 1, text_y + 1, shadow_color, display_text)
-        reaper.ImGui_DrawList_AddText(draw_list, text_x, text_y, text_color, display_text)
+        local cursor_x = center_x + tx
+        local cursor_y = center_y + ty - (total_height / 2)
+        
+        -- 绘制多行文本
+        for _, line in ipairs(lines) do
+            if line ~= "" then
+                local text_w = reaper.ImGui_CalcTextSize(ctx, line)
+                local text_x = cursor_x - (text_w / 2)
+                
+                reaper.ImGui_DrawList_AddText(draw_list, text_x + 1, cursor_y + 1, shadow_color, line)
+                reaper.ImGui_DrawList_AddText(draw_list, text_x, cursor_y, text_color, line)
+            end
+            cursor_y = cursor_y + line_height
+        end
     end
     
     -- 2. 绘制中心圆 (甜甜圈效果 - 关键修正部分)

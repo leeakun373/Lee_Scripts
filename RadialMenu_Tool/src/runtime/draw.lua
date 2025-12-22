@@ -59,9 +59,19 @@ function M.handle_sector_click(R, center_x, center_y, inner_radius, outer_radius
       R.last_interact_time = reaper.time_precise()
       local hovered_id = wheel.get_hovered_sector_id()
       if hovered_id then
-        local sector = config_manager.get_sector_by_id(R.config, hovered_id)
-        if sector then
-          M.on_sector_click(R, sector)
+        -- 管理模式下的点击处理
+        if R.management_mode and R.management_config then
+          local sector = config_manager.get_sector_by_id(R.management_config, hovered_id)
+          if sector then
+            local controller = require("runtime.controller")
+            controller.handle_management_click(sector.id)
+          end
+        else
+          -- 正常模式下的点击处理
+          local sector = config_manager.get_sector_by_id(R.config, hovered_id)
+          if sector then
+            M.on_sector_click(R, sector)
+          end
         end
       end
     end
@@ -79,10 +89,15 @@ end
 -- Main UI draw function (previously M.draw in main_runtime)
 function M.draw(R, should_update)
   local ctx = R.ctx
-  local config = R.config
-  if not ctx or not config then return end
+  if not ctx or not R.config then return end
 
   should_update = (should_update ~= false)
+
+  -- 根据管理模式选择配置源
+  local draw_config = R.config
+  if R.management_mode and R.management_config then
+    draw_config = R.management_config
+  end
 
   local ui_start_time = reaper.time_precise()
 
@@ -93,14 +108,14 @@ function M.draw(R, should_update)
   local center_x = win_x + win_w / 2
   local center_y = win_y + win_h / 2
 
-  local inner_radius = config.menu.inner_radius or 50
-  local outer_radius = config.menu.outer_radius or 200
+  local inner_radius = draw_config.menu.inner_radius or 50
+  local outer_radius = draw_config.menu.outer_radius or 200
 
   -- ============================================================
   -- Animations (wheel open + anim_active policy)
   -- ============================================================
   local now = reaper.time_precise()
-  local anim_scale = anim.calc_wheel_open_scale(config, R.anim_open_start_time, now)
+  local anim_scale = anim.calc_wheel_open_scale(draw_config, R.anim_open_start_time, now)
   anim.update_anim_active_policy(R, should_update, anim_scale, now)
 
   -- ============================================================
@@ -115,7 +130,7 @@ function M.draw(R, should_update)
   -- ============================================================
   -- Sector expansion animation state
   -- ============================================================
-  anim.update_sector_expansion(R, config, should_update, center_x, center_y)
+  anim.update_sector_expansion(R, draw_config, should_update, center_x, center_y)
 
   -- ============================================================
   -- 1) Submenu draw (below wheel)
@@ -126,7 +141,7 @@ function M.draw(R, should_update)
 
   local is_submenu_hovered = false
   if R.show_submenu and R.clicked_sector then
-    is_submenu_hovered = list_view.draw_submenu(ctx, R.clicked_sector, center_x, center_y, sub_scale, config)
+    is_submenu_hovered = list_view.draw_submenu(ctx, R.clicked_sector, center_x, center_y, sub_scale, draw_config)
   end
 
   -- ============================================================
@@ -134,7 +149,7 @@ function M.draw(R, should_update)
   -- ============================================================
   local wheel_start_time = reaper.time_precise()
   local active_id = (R.show_submenu and R.clicked_sector) and R.clicked_sector.id or nil
-  wheel.draw_wheel(ctx, config, active_id, R.is_pinned, anim_scale, R.sector_anim_states)
+  wheel.draw_wheel(ctx, draw_config, active_id, R.is_pinned, anim_scale, R.sector_anim_states)
   local wheel_time = reaper.time_precise() - wheel_start_time
   perf.accumulate_wheel(R, wheel_time)
 
@@ -143,6 +158,12 @@ function M.draw(R, should_update)
   -- ============================================================
   reaper.ImGui_SetCursorPos(ctx, (win_w / 2) - inner_radius, (win_h / 2) - inner_radius)
   reaper.ImGui_InvisibleButton(ctx, "##DragHandle", inner_radius * 2, inner_radius * 2)
+
+  -- Right-click detection for management mode
+  if reaper.ImGui_IsItemClicked(ctx, 1) then -- 1 = Right Button
+    local controller = require("runtime.controller")
+    controller.toggle_management_mode()
+  end
 
   if reaper.ImGui_IsItemActive(ctx) and reaper.ImGui_IsMouseDragging(ctx, 0) then
     R.center_drag_started = true
@@ -179,7 +200,13 @@ function M.draw(R, should_update)
   end
 
   if reaper.ImGui_IsItemDeactivated(ctx) and not R.center_drag_started then
-    R.is_pinned = not R.is_pinned
+    -- 在管理模式下，左键点击中心退出管理模式
+    if R.management_mode then
+      local controller = require("runtime.controller")
+      controller.toggle_management_mode()
+    else
+      R.is_pinned = not R.is_pinned
+    end
   end
 
   if not reaper.ImGui_IsItemActive(ctx) then
@@ -193,13 +220,13 @@ function M.draw(R, should_update)
   end
 
   -- ============================================================
-  -- 4) Hover-to-open
+  -- 4) Hover-to-open (skip in management mode)
   -- ============================================================
-  if not is_dragging then
+  if not is_dragging and not R.management_mode then
     local hovered_id = wheel.get_hovered_sector_id()
-    if config.menu.hover_to_open and hovered_id then
+    if draw_config.menu.hover_to_open and hovered_id then
       if not R.clicked_sector or R.clicked_sector.id ~= hovered_id then
-        local sector = config_manager.get_sector_by_id(config, hovered_id)
+        local sector = config_manager.get_sector_by_id(draw_config, hovered_id)
         if sector then
           R.clicked_sector = sector
           R.show_submenu = true
@@ -209,9 +236,9 @@ function M.draw(R, should_update)
   end
 
   -- ============================================================
-  -- 5) Auto-hide submenu
+  -- 5) Auto-hide submenu (skip in management mode)
   -- ============================================================
-  if R.show_submenu and R.clicked_sector and not is_dragging and config.menu.hover_to_open then
+  if R.show_submenu and R.clicked_sector and not is_dragging and draw_config.menu.hover_to_open and not R.management_mode then
     local hovered_id = wheel.get_hovered_sector_id()
     local is_hovering_any_sector = (hovered_id ~= nil)
     if not is_hovering_any_sector and not is_submenu_hovered then

@@ -311,7 +311,7 @@ function M.draw_rename_modal(ctx, state, callbacks)
     if reaper.ImGui_InputTextFlags_AutoSelectAll then
       it_flags = reaper.ImGui_InputTextFlags_AutoSelectAll()
     end
-    local changed, txt = reaper.ImGui_InputText(ctx, "##RenamePresetName", rename_new_name_buf, 256, it_flags)
+    local changed, txt = reaper.ImGui_InputText(ctx, "##RenamePresetName", rename_new_name_buf, it_flags)
     if changed then rename_new_name_buf = txt end
 
     if rename_error and rename_error ~= "" then

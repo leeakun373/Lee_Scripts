@@ -7,10 +7,10 @@
 
 return {
   -- Schema/version marker for maintenance & migrations
-  CONFIG_SCHEMA_VERSION = "1.1.6",
+  CONFIG_SCHEMA_VERSION = "1.1.7",
 
   -- Config version stored in config.json (kept for backward compatibility)
-  version = "1.1.6",
+  version = "1.1.7",
 
   -- 菜单外观设置
   menu = {
@@ -49,25 +49,26 @@ return {
   },
 
   -- 扇区配置（默认 3 个扇区）
+  -- 注意：图标字符使用图标字体字符（在 setup 界面中会通过 PushFont 显示为图标）
   sectors = {
     {
       id = 1,
       name = "Actions",
-      icon = "⚡",
+      icon = "!",  -- 使用图标字体字符（原为 ⚡）
       color = { 70, 130, 180, 200 }, -- Steel Blue
       slots = {},
     },
     {
       id = 2,
       name = "FX",
-      icon = "🎛️",
+      icon = "P",  -- 使用图标字体字符（原为 🎛️）
       color = { 138, 43, 226, 200 }, -- Blue Violet
       slots = {},
     },
     {
       id = 3,
       name = "View",
-      icon = "👁️",
+      icon = "j",  -- 使用图标字体字符（原为 👁️）
       color = { 34, 139, 34, 200 }, -- Forest Green
       slots = {},
     },
@@ -78,6 +79,8 @@ return {
     show_perf_hud = false, -- 是否显示性能 HUD
   },
 }
+
+
 
 
 
