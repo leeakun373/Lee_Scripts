@@ -6,6 +6,7 @@ local M = {}
 
 local config_manager = require("config_manager")
 local styles = require("gui.styles")
+local submenu_bake_cache = require("gui.submenu_bake_cache")
 
 -- Returns true if reloaded.
 function M.maybe_reload(R)
@@ -29,6 +30,8 @@ function M.maybe_reload(R)
     local diameter = (R.config.menu.outer_radius or 200) * 2 + 20
     R.window_width = diameter
     R.window_height = diameter
+    -- 【极速缓存系统】配置重新加载时清除烘焙缓存
+    submenu_bake_cache.clear()
   end
 
   R.last_config_update_time = current_update_time

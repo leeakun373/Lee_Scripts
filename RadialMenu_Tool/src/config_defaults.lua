@@ -36,6 +36,9 @@ return {
       duration_open = 0.06, -- 轮盘展开时间（秒）
       duration_submenu = 0.05, -- 子菜单弹出时间（秒）
     },
+
+    -- Window Drag Settings
+    enable_window_drag = false, -- 【已废弃】是否启用窗口拖拽功能（保留代码以便未来恢复）
   },
 
   -- 颜色配置（RGBA格式，0-255）

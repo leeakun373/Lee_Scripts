@@ -505,10 +505,33 @@ function M.draw_preview_panel()
         
         reaper.ImGui_Spacing(ctx)
         
-        -- C. Submenu Size (Stacked Vertically)
-        reaper.ImGui_TextDisabled(ctx, "子菜单尺寸")
+        -- C. Submenu Size (独立的子菜单窗口尺寸)
+        reaper.ImGui_TextDisabled(ctx, i18n.t("submenu_size"))
         
-        reaper.ImGui_Text(ctx, "宽度:")
+        reaper.ImGui_Text(ctx, i18n.t("width"))
+        reaper.ImGui_SameLine(ctx)
+        local submenu_w = config.menu.submenu_width or 250
+        local submenu_w_changed, new_submenu_w = reaper.ImGui_SliderInt(ctx, "##SubmenuWidth", submenu_w, 200, 400, "%d px")
+        if submenu_w_changed then
+            config.menu.submenu_width = new_submenu_w
+            is_modified = true
+        end
+        
+        reaper.ImGui_Text(ctx, i18n.t("height"))
+        reaper.ImGui_SameLine(ctx)
+        local submenu_h = config.menu.submenu_height or 150
+        local submenu_h_changed, new_submenu_h = reaper.ImGui_SliderInt(ctx, "##SubmenuHeight", submenu_h, 100, 300, "%d px")
+        if submenu_h_changed then
+            config.menu.submenu_height = new_submenu_h
+            is_modified = true
+        end
+        
+        reaper.ImGui_Spacing(ctx)
+        
+        -- D. Submenu Button Size (子菜单按钮尺寸)
+        reaper.ImGui_TextDisabled(ctx, i18n.t("submenu_button_size"))
+        
+        reaper.ImGui_Text(ctx, i18n.t("button_width"))
         reaper.ImGui_SameLine(ctx)
         local slot_w = config.menu.slot_width or 65
         local w_changed, new_w = reaper.ImGui_SliderInt(ctx, "##SlotWidth", slot_w, 60, 150, "%d px")
@@ -517,12 +540,35 @@ function M.draw_preview_panel()
             is_modified = true
         end
         
-        reaper.ImGui_Text(ctx, "高度:")
+        reaper.ImGui_Text(ctx, i18n.t("button_height"))
         reaper.ImGui_SameLine(ctx)
         local slot_h = config.menu.slot_height or 25
         local h_changed, new_h = reaper.ImGui_SliderInt(ctx, "##SlotHeight", slot_h, 24, 60, "%d px")
         if h_changed then
             config.menu.slot_height = new_h
+            is_modified = true
+        end
+        
+        reaper.ImGui_Spacing(ctx)
+        
+        -- E. Submenu Layout (子菜单布局参数)
+        reaper.ImGui_TextDisabled(ctx, i18n.t("submenu_layout"))
+        
+        reaper.ImGui_Text(ctx, i18n.t("button_gap"))
+        reaper.ImGui_SameLine(ctx)
+        local submenu_gap = config.menu.submenu_gap or 3
+        local gap_changed, new_gap = reaper.ImGui_SliderInt(ctx, "##SubmenuGap", submenu_gap, 1, 10, "%d px")
+        if gap_changed then
+            config.menu.submenu_gap = new_gap
+            is_modified = true
+        end
+        
+        reaper.ImGui_Text(ctx, i18n.t("window_padding"))
+        reaper.ImGui_SameLine(ctx)
+        local submenu_padding = config.menu.submenu_padding or 4
+        local padding_changed, new_padding = reaper.ImGui_SliderInt(ctx, "##SubmenuPadding", submenu_padding, 2, 15, "%d px")
+        if padding_changed then
+            config.menu.submenu_padding = new_padding
             is_modified = true
         end
         
@@ -624,7 +670,7 @@ function M.draw_preview_panel()
         
         -- 3. Interaction
         local hover_mode = config.menu.hover_to_open or false
-        local hover_changed, new_hover_mode = reaper.ImGui_Checkbox(ctx, "悬停打开子菜单", hover_mode)
+        local hover_changed, new_hover_mode = reaper.ImGui_Checkbox(ctx, i18n.t("hover_to_open"), hover_mode)
         if hover_changed then
             config.menu.hover_to_open = new_hover_mode
             is_modified = true

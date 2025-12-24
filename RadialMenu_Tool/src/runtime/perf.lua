@@ -35,8 +35,30 @@ function M.draw_hud(R)
     return
   end
 
-  if R.center_drag_started then
-    return
+  -- 【已废弃】拖拽检测：如果启用拖拽功能，拖拽时隐藏性能HUD
+  -- 由于拖拽功能已默认禁用，此检测也被禁用
+  local enable_drag = config.menu.enable_window_drag or false
+  if enable_drag then
+    local ctx = R.ctx
+    if ctx and reaper.ImGui_IsMouseDragging then
+      if reaper.ImGui_IsMouseDragging(ctx, 0) then
+        -- 检查是否在拖拽中心手柄（通过检查鼠标是否在内圈区域）
+        local mouse_x, mouse_y = reaper.ImGui_GetMousePos(ctx)
+        local win_x, win_y = reaper.ImGui_GetWindowPos(ctx)
+        local win_w, win_h = reaper.ImGui_GetWindowSize(ctx)
+        local center_x = win_x + win_w / 2
+        local center_y = win_y + win_h / 2
+        local inner_radius = config.menu.inner_radius or 50
+        
+        local dx = mouse_x - center_x
+        local dy = mouse_y - center_y
+        local distance = math.sqrt(dx * dx + dy * dy)
+        
+        if distance <= inner_radius then
+          return  -- 正在拖拽中心，隐藏HUD
+        end
+      end
+    end
   end
 
   local ctx = R.ctx

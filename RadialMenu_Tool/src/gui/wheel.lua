@@ -11,6 +11,7 @@ local im_utils = require("im_utils")
 local styles = require("gui.styles")
 
 local hovered_sector_id = nil
+local last_highlighted_sector_id = nil  -- 跟踪上次高亮的扇区（用于局部重绘优化）
 
 -- ============================================================================
 -- 颜色插值工具函数
@@ -49,7 +50,8 @@ end
 -- @param is_pinned: 是否处于 Pin 住状态 (可选)
 -- @param anim_scale: 动画缩放因子 (0.0 到 1.0，默认 1.0)
 -- @param sector_anim_states: 扇区扩展动画状态表 (可选)
-function M.draw_wheel(ctx, config, active_sector_id, is_pinned, anim_scale, sector_anim_states)
+-- @param hovered_sector_id: 当前悬停的扇区 ID (已通过纯数学计算得出，可选)
+function M.draw_wheel(ctx, config, active_sector_id, is_pinned, anim_scale, sector_anim_states, hovered_sector_id)
     anim_scale = anim_scale or 1.0
     sector_anim_states = sector_anim_states or {}
     if not ctx or not config or not config.sectors then return end
@@ -65,14 +67,23 @@ function M.draw_wheel(ctx, config, active_sector_id, is_pinned, anim_scale, sect
     -- 计算轮盘中心点 (屏幕坐标)
     local center_x = window_x + window_w / 2
     local center_y = window_y + window_h / 2
-    local mouse_x, mouse_y = reaper.ImGui_GetMousePos(ctx)
     
     -- 应用动画透明度
     reaper.ImGui_PushStyleVar(ctx, reaper.ImGui_StyleVar_Alpha(), anim_scale)
     
-    -- 1. 获取悬停扇区
-    local hovered_sector = M.get_hovered_sector(mouse_x, mouse_y, center_x, center_y, config)
-    hovered_sector_id = hovered_sector and hovered_sector.id or nil
+    -- 【重构】使用传入的 hovered_sector_id（已在 draw.lua 中通过纯数学计算得出）
+    -- 如果未传入，则回退到旧的检测方法（向后兼容）
+    if hovered_sector_id == nil then
+        local mouse_x, mouse_y = reaper.ImGui_GetMousePos(ctx)
+        local hovered_sector = M.get_hovered_sector(mouse_x, mouse_y, center_x, center_y, config)
+        hovered_sector_id = hovered_sector and hovered_sector.id or nil
+    end
+    
+    -- 【性能优化】检测高亮变化，只重绘变化的扇区
+    local highlight_changed = (hovered_sector_id ~= last_highlighted_sector_id)
+    if highlight_changed then
+        last_highlighted_sector_id = hovered_sector_id
+    end
     
     -- 应用动画缩放到基础半径
     local inner_radius = config.menu.inner_radius * anim_scale
@@ -83,9 +94,10 @@ function M.draw_wheel(ctx, config, active_sector_id, is_pinned, anim_scale, sect
     local expansion_enabled = (config.menu.enable_sector_expansion ~= false)
     
     for i, sector in ipairs(config.sectors) do
-        local is_hovered = (hovered_sector_id == sector.id)
-        -- 只要 active_id 匹配，就强制高亮 (视觉连接)
-        local is_active = (active_sector_id and tonumber(active_sector_id) == tonumber(sector.id))
+        -- 【修复】确保 ID 比较正确，避免所有扇区都被高亮
+        local is_hovered = (hovered_sector_id ~= nil and tostring(hovered_sector_id) == tostring(sector.id))
+        -- 只要 active_id 匹配，就强制高亮 (视觉连接) - 用于子菜单激活时的高亮
+        local is_active = (active_sector_id ~= nil and tostring(active_sector_id) == tostring(sector.id))
         
         -- [ANIMATION] 获取此扇区的扩展进度
         local expansion_progress = sector_anim_states[sector.id] or 0.0
@@ -93,6 +105,7 @@ function M.draw_wheel(ctx, config, active_sector_id, is_pinned, anim_scale, sect
         -- 【关键修复】如果动画关闭，根据悬停/激活状态强制设置进度
         if not expansion_enabled then
             -- 动画关闭时，如果悬停或激活，强制显示高亮状态
+            -- 【修复】确保只有匹配的扇区才高亮
             if is_hovered or is_active then
                 expansion_progress = 1.0
             else
@@ -123,12 +136,12 @@ function M.draw_wheel(ctx, config, active_sector_id, is_pinned, anim_scale, sect
         M.draw_sector(draw_list, ctx, center_x, center_y, sector, i, #config.sectors, is_hovered, is_active, config, inner_radius, current_sector_outer, expansion_progress)
     end
     
-    -- 3. 绘制中心圆 (甜甜圈效果)
-    if config.menu then
-        M.draw_center_circle(draw_list, ctx, center_x, center_y, config, inner_radius)
-    end
+    -- 3. 绘制中心圆 (甜甜圈效果) - 【已禁用】取消内圈图像绘制
+    -- if config.menu then
+    --     M.draw_center_circle(draw_list, ctx, center_x, center_y, config, inner_radius)
+    -- end
     
-    -- 4. 绘制中心 Pin 按钮
+    -- 4. 绘制中心 Pin 按钮（保留）
     if config.menu then
         M.draw_pin_button(draw_list, center_x, center_y, config, is_pinned or false)
     end
@@ -195,10 +208,19 @@ function M.draw_sector(draw_list, ctx, center_x, center_y, sector, index, total_
     local draw_start = start_angle + gap_radians
     local draw_end = end_angle - gap_radians
     
-    -- 颜色平滑插值：使用 expansion_progress 进行线性插值
-    -- expansion_progress 是 0.0 (Idle) 到 1.0 (Hovered) 的动画值
-    local col_in = lerp_color(styles.colors.sector_bg_in, styles.colors.sector_active_in, expansion_progress)
-    local col_out = lerp_color(styles.colors.sector_bg_out, styles.colors.sector_active_out, expansion_progress)
+    -- 【性能优化】使用预计算的颜色，避免运行时插值计算
+    local col_in, col_out = styles.get_precomputed_sector_colors(expansion_progress)
+    
+    -- 如果预计算函数返回nil，回退到原来的插值方法
+    if not col_in or not col_out then
+        col_in = lerp_color(styles.colors.sector_bg_in, styles.colors.sector_active_in, expansion_progress)
+        col_out = lerp_color(styles.colors.sector_bg_out, styles.colors.sector_active_out, expansion_progress)
+    end
+    
+    -- 【新增】绘制扇区间隙填充（使用边框颜色）
+    -- 在绘制扇区之前先填充间隙，这样扇区会覆盖在间隙之上
+    M.draw_sector_gap_fill(draw_list, center_x, center_y, inner_radius, outer_radius, 
+                           start_angle, draw_start, end_angle, draw_end)
     
     -- 绘制扇形（使用插值后的颜色）
     M.draw_sector_arc_gradient(draw_list, center_x, center_y, inner_radius, outer_radius, 
@@ -290,6 +312,68 @@ function M.draw_sector_rim_light(draw_list, center_x, center_y, outer_radius, st
             center_x + x2, center_y + y2,
             rim_color, 2.0)
     end
+end
+
+-- 绘制扇区间隙填充（使用边框颜色填充间隙区域）
+function M.draw_sector_gap_fill(draw_list, center_x, center_y, inner_radius, outer_radius, 
+                                start_angle, draw_start, end_angle, draw_end)
+    local border_color = styles.correct_rgba_to_u32(styles.colors.border)
+    local gap_size = styles.sizes.gap_size or 3.0
+    
+    -- 填充左侧间隙（从 start_angle 到 draw_start）
+    if draw_start > start_angle then
+        M.draw_sector_arc_solid(draw_list, center_x, center_y, inner_radius, outer_radius, 
+                                start_angle, draw_start, border_color)
+        -- 【新增】为间隙填充添加描边，确保圆看起来平滑
+        M.draw_sector_border_line(draw_list, center_x, center_y, inner_radius, outer_radius, 
+                                  start_angle, draw_start, gap_size)
+    end
+    
+    -- 填充右侧间隙（从 draw_end 到 end_angle）
+    if end_angle > draw_end then
+        M.draw_sector_arc_solid(draw_list, center_x, center_y, inner_radius, outer_radius, 
+                                draw_end, end_angle, border_color)
+        -- 【新增】为间隙填充添加描边，确保圆看起来平滑
+        M.draw_sector_border_line(draw_list, center_x, center_y, inner_radius, outer_radius, 
+                                  draw_end, end_angle, gap_size)
+    end
+end
+
+-- 绘制实心扇形（单色填充，用于间隙填充）
+function M.draw_sector_arc_solid(draw_list, center_x, center_y, inner_radius, outer_radius, start_angle, end_angle, color)
+    local avg_radius = (inner_radius + outer_radius) / 2
+    local outer_segments = 32
+    local inner_segments = 24
+    
+    -- 根据半径调整分段数
+    if avg_radius < 50 then
+        outer_segments = 16
+        inner_segments = 12
+    elseif avg_radius < 100 then
+        outer_segments = 24
+        inner_segments = 18
+    end
+    
+    -- 计算角度跨度
+    local angle_span = end_angle - start_angle
+    if angle_span < 0 then angle_span = angle_span + 2 * math.pi end
+    
+    -- 根据角度跨度调整分段数
+    local angle_ratio = angle_span / (2 * math.pi)
+    outer_segments = math.max(12, math.floor(outer_segments * angle_ratio))
+    inner_segments = math.max(12, math.floor(inner_segments * angle_ratio))
+    
+    -- 使用 Path API 进行单次绘制
+    reaper.ImGui_DrawList_PathClear(draw_list)
+    
+    -- 绘制外弧（从 StartAngle 到 EndAngle）
+    reaper.ImGui_DrawList_PathArcTo(draw_list, center_x, center_y, outer_radius, start_angle, end_angle, outer_segments)
+    
+    -- 绘制内弧（从 EndAngle 到 StartAngle，角度反向以闭合路径）
+    reaper.ImGui_DrawList_PathArcTo(draw_list, center_x, center_y, inner_radius, end_angle, start_angle, inner_segments)
+    
+    -- 填充封闭路径
+    reaper.ImGui_DrawList_PathFillConvex(draw_list, color)
 end
 
 -- 绘制扇区边框线（纯黑切割线）
@@ -419,22 +503,48 @@ function M.draw_sector_text(draw_list, ctx, center_x, center_y, text_radius, sta
 end
 
 -- ============================================================================
--- 悬停检测
+-- 悬停检测（纯数学判定，参考 Sexan 的实现）
 -- ============================================================================
 
--- 根据鼠标位置判断悬停在哪个扇区
+-- 根据鼠标位置判断悬停在哪个扇区（纯数学计算，不依赖 UI 碰撞）
+-- 使用 Sexan 的 AngleInRange 算法，解决闪烁和延迟问题
 function M.get_hovered_sector(mouse_x, mouse_y, center_x, center_y, config)
-    local angle, distance = math_utils.get_mouse_angle_and_distance(mouse_x, mouse_y, center_x, center_y)
+    -- 【输入层】获取鼠标数据（只获取，不画图）
+    local dx = mouse_x - center_x
+    local dy = mouse_y - center_y
+    local dist_sq = dx * dx + dy * dy  -- 用平方距离，省去开根号，性能更好
     
     local inner_radius = config.menu.inner_radius
     local outer_radius = config.menu.outer_radius
+    local inner_radius_sq = inner_radius * inner_radius
     
-    if distance < inner_radius or distance > outer_radius then return nil end
+    -- 【逻辑层】纯数学计算 Active Sector（不依赖任何 UI）
+    -- 只有出了内圈才开始算（实现 Sexan 的"无限外延"且"中间有死区"）
+    if dist_sq <= inner_radius_sq then
+        return nil  -- 在内圈死区内，不激活任何扇区
+    end
     
-    local sector_index = math_utils.angle_to_sector_index(angle, #config.sectors, -math.pi / 2)
+    -- 计算鼠标角度 (0 到 2PI)
+    local mouse_angle = math.atan(dy, dx)
+    if mouse_angle < 0 then 
+        mouse_angle = mouse_angle + 2 * math.pi 
+    end
     
-    if sector_index >= 1 and sector_index <= #config.sectors then
-        return config.sectors[sector_index]
+    -- 遍历所有扇区，看鼠标角度落在哪一个里面
+    local num_sectors = #config.sectors
+    local step = (2 * math.pi) / num_sectors
+    local start_offset = -math.pi / 2  -- 从上方（-90度）开始分布
+    
+    for i = 1, num_sectors do
+        local ang_min = start_offset + (i - 1) * step
+        local ang_max = start_offset + i * step
+        
+        -- 【关键点】用数学判断，而不是 UI 碰撞
+        if math_utils.angle_in_range(mouse_angle, ang_min, ang_max) then
+            -- 找到了就返回，不用再算别的了
+            -- 注意：这里不检查距离上限，实现"无限外延"效果
+            return config.sectors[i]
+        end
     end
     
     return nil

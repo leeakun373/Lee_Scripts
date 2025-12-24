@@ -1,5 +1,5 @@
 -- @description Lee Radial Menu Tool
--- @version 1.1.8
+-- @version 1.1.9
 -- @author Lee
 -- @about
 --   Powerful customizable radial menu tool for REAPER

@@ -72,6 +72,14 @@ function M.normalize_angle(angle)
     return angle
 end
 
+-- Sexan 的核心算法：判断当前角度是否在 [lower, upper] 范围内
+-- 处理了 0/360 度跨越的边界情况，非常稳定
+-- 魔法数字 0.005 是为了防止浮点数精度误差导致的边缘闪烁
+function M.angle_in_range(angle, lower, upper)
+    local pi = math.pi
+    return (angle - lower + 0.005) % (2 * pi) <= (upper - 0.005 - lower) % (2 * pi)
+end
+
 -- 角度转弧度
 function M.deg_to_rad(degrees)
     return degrees * math.pi / 180

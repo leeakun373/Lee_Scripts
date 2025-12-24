@@ -25,8 +25,8 @@ M.colors = {
     text_normal = {180, 180, 180, 255},  -- 新版本文本颜色
     text_disabled = {128, 128, 128, 200},
     text_shadow = {0, 0, 0, 200},  -- 更新为更深的阴影
-    -- 边框颜色：纯黑色（关键：用于创建"间隙"效果）
-    border = {0, 0, 0, 255},  -- 纯黑色边框
+    -- 边框颜色：比扇区颜色更深的半透明（用于创建"间隙"效果）
+    border = {15, 15, 15, 150},  -- 深灰色半透明边框（比扇区深）
     hover = {255, 255, 255, 120},
     active = {255, 255, 255, 150},
     -- Mantrika 风格：渐变扇区颜色（高保真版本）
@@ -324,6 +324,74 @@ end
 -- 获取玻璃边框颜色（U32 格式）- 使用修正的颜色打包函数
 function M.get_glass_border_u32()
     return correct_rgba_to_u32(M.colors.glass_border)
+end
+
+-- ============================================================================
+-- 预计算颜色表（性能优化）
+-- ============================================================================
+
+-- 预计算的扇区颜色表（避免运行时计算）
+local precomputed_sector_colors = {
+    -- 默认状态（expansion_progress = 0.0）
+    default_in = nil,
+    default_out = nil,
+    -- 激活状态（expansion_progress = 1.0）
+    active_in = nil,
+    active_out = nil,
+    -- 中间状态（expansion_progress = 0.5，用于平滑过渡）
+    mid_in = nil,
+    mid_out = nil
+}
+
+-- 初始化预计算颜色
+local function init_precomputed_sector_colors()
+    -- 线性插值函数
+    local function lerp(a, b, t)
+        return a + (b - a) * t
+    end
+    
+    -- 颜色插值
+    local function lerp_color(c1, c2, t)
+        t = math.max(0.0, math.min(1.0, t))
+        local r = lerp(c1[1], c2[1], t)
+        local g = lerp(c1[2], c2[2], t)
+        local b = lerp(c1[3], c2[3], t)
+        local a = lerp(c1[4], c2[4], t)
+        return correct_rgba_to_u32({r, g, b, a})
+    end
+    
+    -- 预计算不同状态的颜色
+    precomputed_sector_colors.default_in = correct_rgba_to_u32(M.colors.sector_bg_in)
+    precomputed_sector_colors.default_out = correct_rgba_to_u32(M.colors.sector_bg_out)
+    precomputed_sector_colors.active_in = correct_rgba_to_u32(M.colors.sector_active_in)
+    precomputed_sector_colors.active_out = correct_rgba_to_u32(M.colors.sector_active_out)
+    precomputed_sector_colors.mid_in = lerp_color(M.colors.sector_bg_in, M.colors.sector_active_in, 0.5)
+    precomputed_sector_colors.mid_out = lerp_color(M.colors.sector_bg_out, M.colors.sector_active_out, 0.5)
+end
+
+-- 初始化预计算颜色
+init_precomputed_sector_colors()
+
+-- 获取预计算的扇区颜色（根据expansion_progress）
+-- @param expansion_progress: 0.0 (默认) 到 1.0 (激活)
+-- @return: col_in, col_out (U32格式)
+function M.get_precomputed_sector_colors(expansion_progress)
+    expansion_progress = expansion_progress or 0.0
+    expansion_progress = math.max(0.0, math.min(1.0, expansion_progress))
+    
+    -- 使用预计算的颜色，避免运行时插值计算
+    -- 对于中间值，使用预计算的中间颜色作为近似（性能优化）
+    if expansion_progress <= 0.0 then
+        return precomputed_sector_colors.default_in, precomputed_sector_colors.default_out
+    elseif expansion_progress >= 1.0 then
+        return precomputed_sector_colors.active_in, precomputed_sector_colors.active_out
+    elseif expansion_progress <= 0.5 then
+        -- 0.0 到 0.5 之间：使用中间颜色作为近似
+        return precomputed_sector_colors.mid_in, precomputed_sector_colors.mid_out
+    else
+        -- 0.5 到 1.0 之间：更接近激活状态，使用激活颜色
+        return precomputed_sector_colors.active_in, precomputed_sector_colors.active_out
+    end
 end
 
 return M

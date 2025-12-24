@@ -1,5 +1,5 @@
 -- @description Lee Radial Menu Tool
--- @version 1.1.8
+-- @version 1.1.9
 -- @author Lee
 -- @about
 --   Powerful customizable radial menu tool for REAPER
@@ -9,13 +9,13 @@
 --   - ValidatePtr validation to avoid frequent ListClipper recreation
 --   - Preview area caching mechanism with signature-based invalidation
 --   - Text line caching for wheel rendering
+--   - Pre-bake system for submenu layout (zero-cost rendering after first frame)
 --   
---   Recent Updates (v1.1.8):
---   - Full internationalization support (Chinese/English switching)
---   - Fixed button IDs to prevent UI failures after language switching
---   - Fixed popup modal ID matching issues
---   - Improved preset management with proper error handling
---   - Enhanced UI stability during language changes
+--   Recent Updates (v1.1.9):
+--   - Submenu layout parameters (independent size, button gap, window padding)
+--   - Complete internationalization support (Chinese/English switching)
+--   - Fixed submenu button overflow issues
+--   - Improved UI parameter controls in Setup interface
 -- @provides
 --   [main] .
 --   [main] Lee_RadialMenu_Setup.lua

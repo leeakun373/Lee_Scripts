@@ -58,6 +58,7 @@ end
 
 -- Updates R.sector_anim_states for hover expansion and flags anim_active when in-flight.
 -- Returns current_hover_id.
+-- 【已废弃】保留此函数以向后兼容，但推荐使用 update_sector_expansion_with_active
 function M.update_sector_expansion(R, config, should_update, center_x, center_y)
   local expansion_enabled = (config.menu.enable_sector_expansion ~= false)
   local current_hover_id = nil
@@ -91,7 +92,9 @@ function M.update_sector_expansion(R, config, should_update, center_x, center_y)
       -- 【修复1：关闭功能时强制重置】必须要有 else，否则会残留状态
       if expansion_enabled then
         local is_active_submenu = (R.show_submenu and R.clicked_sector and R.clicked_sector.id == id)
-        if (id == current_hover_id) or is_active_submenu then
+        -- 【修复】确保 ID 比较正确，使用字符串比较避免类型问题
+        local hover_match = (current_hover_id ~= nil and tostring(id) == tostring(current_hover_id))
+        if hover_match or is_active_submenu then
           target_val = 1.0
         else
           -- 鼠标未悬停且未激活子菜单时，目标值强制为 0
@@ -116,7 +119,85 @@ function M.update_sector_expansion(R, config, should_update, center_x, center_y)
 
       local k = 6 + (speed_level - 1) * 2
       local settle_epsilon = 0.002
-      if math.abs(current_val - target_val) > settle_epsilon then
+      
+      -- 【修复】当鼠标离开扇区时（target_val 从 1.0 变为 0.0），立即重置，不进行平滑过渡
+      -- 这样颜色会立即消失，符合 Sexan 的交互体验
+      if target_val == 0.0 and current_val > 0.0 then
+        -- 鼠标离开时立即重置
+        R.sector_anim_states[id] = 0.0
+        R.anim_active = true
+      elseif math.abs(current_val - target_val) > settle_epsilon then
+        -- 鼠标进入时使用平滑过渡
+        local alpha = 1 - math.exp(-k * (R.current_frame_dt or 0.0))
+        R.sector_anim_states[id] = current_val + (target_val - current_val) * alpha
+        R.anim_active = true
+      else
+        R.sector_anim_states[id] = target_val
+      end
+    end
+  end
+
+  return current_hover_id
+end
+
+-- 【新增】使用已计算好的 active_sector_id 更新扇区扩展动画
+-- 这是"先算后画"架构的关键函数，避免重复计算
+function M.update_sector_expansion_with_active(R, config, should_update, active_sector_id)
+  local expansion_enabled = (config.menu.enable_sector_expansion ~= false)
+  local current_hover_id = active_sector_id or nil
+
+  -- 更新 hover 状态变化标志
+  if current_hover_id ~= R.last_hover_sector_id then
+    R.anim_active = true
+    R.last_hover_sector_id = current_hover_id
+  end
+
+  -- 更新每个扇区的动画状态
+  if config.sectors then
+    for _, sector in ipairs(config.sectors) do
+      local id = sector.id
+      local current_val = R.sector_anim_states[id] or 0.0
+      local target_val = 0.0  -- 【关键】默认必须是 0
+
+      -- 【修复1：关闭功能时强制重置】必须要有 else，否则会残留状态
+      if expansion_enabled then
+        local is_active_submenu = (R.show_submenu and R.clicked_sector and R.clicked_sector.id == id)
+        -- 【修复】确保 ID 比较正确，使用字符串比较避免类型问题
+        local hover_match = (current_hover_id ~= nil and tostring(id) == tostring(current_hover_id))
+        if hover_match or is_active_submenu then
+          target_val = 1.0
+        else
+          -- 鼠标未悬停且未激活子菜单时，目标值强制为 0
+          target_val = 0.0
+        end
+      else
+        -- 【修复1：关闭动画时，强制目标值为 0，清除残留状态】
+        target_val = 0.0
+      end
+
+      local speed_level_raw = config.menu.hover_animation_speed or 8
+      local speed_level
+      if type(speed_level_raw) == "number" then
+        if speed_level_raw < 1 then
+          speed_level = math.max(1, math.min(10, math.floor((speed_level_raw / 0.05) + 0.5)))
+        else
+          speed_level = math.max(1, math.min(10, math.floor(speed_level_raw + 0.5)))
+        end
+      else
+        speed_level = 4
+      end
+
+      local k = 6 + (speed_level - 1) * 2
+      local settle_epsilon = 0.002
+      
+      -- 【修复】当鼠标离开扇区时（target_val 从 1.0 变为 0.0），立即重置，不进行平滑过渡
+      -- 这样颜色会立即消失，符合 Sexan 的交互体验
+      if target_val == 0.0 and current_val > 0.0 then
+        -- 鼠标离开时立即重置
+        R.sector_anim_states[id] = 0.0
+        R.anim_active = true
+      elseif math.abs(current_val - target_val) > settle_epsilon then
+        -- 鼠标进入时使用平滑过渡
         local alpha = 1 - math.exp(-k * (R.current_frame_dt or 0.0))
         R.sector_anim_states[id] = current_val + (target_val - current_val) * alpha
         R.anim_active = true

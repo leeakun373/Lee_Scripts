@@ -10,6 +10,8 @@ local config_manager = require("config_manager")
 local styles = require("gui.styles")
 local list_view = require("gui.list_view")
 local execution = require("logic.execution")
+local submenu_cache = require("gui.submenu_cache")
+local submenu_bake_cache = require("gui.submenu_bake_cache")
 
 local draw = require("runtime.draw")
 local config_reload = require("runtime.config_reload")
@@ -65,6 +67,13 @@ local R = {
   -- management mode
   management_mode = false,
   management_config = nil,
+
+  -- 如影随形窗口系统
+  last_window_x = nil,
+  last_window_y = nil,
+  last_window_w = nil,
+  last_window_h = nil,
+  current_active_sector_id = nil,
 }
 
 local IDLE_FPS = 20
@@ -245,36 +254,84 @@ function M.loop()
     reaper.ImGui_WindowFlags_NoSavedSettings() |
     reaper.ImGui_WindowFlags_NoFocusOnAppearing()
 
-  reaper.ImGui_SetNextWindowBgAlpha(R.ctx, 0.0)
-  reaper.ImGui_SetNextWindowSize(R.ctx, R.window_width, R.window_height, reaper.ImGui_Cond_Always())
+  -- ============================================================
+  -- 【固定窗口大小系统】使用预计算的最大包围盒
+  -- ============================================================
+  -- 获取最大包围盒数据（固定窗口大小）
+  local max_bounds = submenu_bake_cache.get_max_bounds()
+  local win_w = max_bounds.win_w
+  local win_h = max_bounds.win_h
+  
+  -- 如果还没有烘焙，使用默认大小
+  if win_w == 0 or win_h == 0 then
+    local draw_config = R.config
+    if R.management_mode and R.management_config then
+      draw_config = R.management_config
+    end
+    local outer_radius = draw_config.menu.outer_radius or 200
+    win_w = outer_radius * 2 + 40
+    win_h = outer_radius * 2 + 40
+  end
 
+  -- 只在第一帧设置窗口位置（以鼠标为中心，减去圆心偏移量）
   if R.is_first_display then
     local native_x, native_y = reaper.GetMousePosition()
     if native_x and native_y then
-      local mouse_x, mouse_y = reaper.ImGui_PointConvertNative(R.ctx, native_x, native_y, false)
-      local window_x = mouse_x - R.window_width / 2
-      local window_y = mouse_y - R.window_height / 2
-
+      -- 【关键修复】ImGui_SetNextWindowPos 需要屏幕坐标，不是窗口坐标
+      -- 如果还没有烘焙，使用窗口中心作为默认偏移量
+      local center_offset_x = max_bounds.center_offset_x
+      local center_offset_y = max_bounds.center_offset_y
+      
+      -- 如果还没有烘焙（偏移量为0），使用窗口中心作为默认偏移量
+      if center_offset_x == 0 or center_offset_y == 0 then
+        center_offset_x = win_w / 2
+        center_offset_y = win_h / 2
+      end
+      
+      -- 设置位置，确保圆心正好在鼠标位置（使用屏幕坐标）
+      local win_x = native_x - center_offset_x
+      local win_y = native_y - center_offset_y
+      
+      -- 确保窗口不会超出视口
       local viewport = reaper.ImGui_GetMainViewport(R.ctx)
       if viewport then
         local vp_x, vp_y = reaper.ImGui_Viewport_GetPos(viewport)
         local vp_w, vp_h = reaper.ImGui_Viewport_GetSize(viewport)
-
-        if window_x < vp_x then window_x = vp_x end
-        if window_x + R.window_width > vp_x + vp_w then window_x = vp_x + vp_w - R.window_width end
-        if window_y < vp_y then window_y = vp_y end
-        if window_y + R.window_height > vp_y + vp_h then window_y = vp_y + vp_h - R.window_height end
+        
+        if win_x < vp_x then win_x = vp_x end
+        if win_y < vp_y then win_y = vp_y end
+        if win_x + win_w > vp_x + vp_w then win_x = vp_x + vp_w - win_w end
+        if win_y + win_h > vp_y + vp_h then win_y = vp_y + vp_h - win_h end
       end
-
-      reaper.ImGui_SetNextWindowPos(R.ctx, window_x, window_y, reaper.ImGui_Cond_Appearing())
+      
+      reaper.ImGui_SetNextWindowPos(R.ctx, win_x, win_y, reaper.ImGui_Cond_Appearing())
+      R.last_window_x = win_x
+      R.last_window_y = win_y
     else
       local viewport = reaper.ImGui_GetMainViewport(R.ctx)
       if viewport then
         local vp_x, vp_y = reaper.ImGui_Viewport_GetPos(viewport)
         local vp_w, vp_h = reaper.ImGui_Viewport_GetSize(viewport)
-        reaper.ImGui_SetNextWindowPos(R.ctx, vp_x + (vp_w - R.window_width) / 2, vp_y + (vp_h - R.window_height) / 2, reaper.ImGui_Cond_Appearing())
+        local win_x = vp_x + (vp_w - win_w) / 2
+        local win_y = vp_y + (vp_h - win_h) / 2
+        reaper.ImGui_SetNextWindowPos(R.ctx, win_x, win_y, reaper.ImGui_Cond_Appearing())
+        R.last_window_x = win_x
+        R.last_window_y = win_y
       end
     end
+    R.is_first_display = false
+  end
+
+  -- 设置固定窗口大小（不再每帧变化）
+  reaper.ImGui_SetNextWindowSize(R.ctx, win_w, win_h, reaper.ImGui_Cond_Always())
+  reaper.ImGui_SetNextWindowBgAlpha(R.ctx, 0.0)
+  
+  -- 保存窗口大小（用于后续使用）
+  R.last_window_w = win_w
+  R.last_window_h = win_h
+
+  -- 第一帧显示逻辑已移到上面的智能窗口边界计算中
+  if R.is_first_display then
     R.is_first_display = false
   end
 
@@ -300,6 +357,54 @@ function M.loop()
 
   local visible, open = reaper.ImGui_Begin(ctx, "Radial Menu", true, window_flags)
   if visible then
+    -- 【极速缓存系统】第一帧烘焙所有繁重数据
+    -- 必须在 ImGui_Begin 之后调用，因为 CalcTextSize 需要上下文
+    if not submenu_bake_cache.is_baked() then
+      local win_w, win_h = reaper.ImGui_GetWindowSize(ctx)
+      local win_x, win_y = reaper.ImGui_GetWindowPos(ctx)
+      local center_x = win_x + win_w / 2
+      local center_y = win_y + win_h / 2
+      local draw_config = R.config
+      if R.management_mode and R.management_config then
+        draw_config = R.management_config
+      end
+      local outer_radius = draw_config.menu.outer_radius or 200
+      submenu_bake_cache.bake_submenus(ctx, center_x, center_y, outer_radius, draw_config)
+      
+      -- 【关键修复】烘焙完成后，使用计算好的最大包围盒更新窗口大小和位置
+      local new_max_bounds = submenu_bake_cache.get_max_bounds()
+      if new_max_bounds.win_w > 0 and new_max_bounds.win_h > 0 then
+        -- 更新窗口大小
+        reaper.ImGui_SetNextWindowSize(ctx, new_max_bounds.win_w, new_max_bounds.win_h, reaper.ImGui_Cond_Always())
+        R.last_window_w = new_max_bounds.win_w
+        R.last_window_h = new_max_bounds.win_h
+        
+        -- 【关键修复】重新调整窗口位置，确保圆心在鼠标位置
+        -- 因为窗口大小可能改变了，需要重新计算位置
+        local native_x, native_y = reaper.GetMousePosition()
+        if native_x and native_y then
+          local new_win_x = native_x - new_max_bounds.center_offset_x
+          local new_win_y = native_y - new_max_bounds.center_offset_y
+          
+          -- 确保窗口不会超出视口
+          local viewport = reaper.ImGui_GetMainViewport(ctx)
+          if viewport then
+            local vp_x, vp_y = reaper.ImGui_Viewport_GetPos(viewport)
+            local vp_w, vp_h = reaper.ImGui_Viewport_GetSize(viewport)
+            
+            if new_win_x < vp_x then new_win_x = vp_x end
+            if new_win_y < vp_y then new_win_y = vp_y end
+            if new_win_x + new_max_bounds.win_w > vp_x + vp_w then new_win_x = vp_x + vp_w - new_max_bounds.win_w end
+            if new_win_y + new_max_bounds.win_h > vp_y + vp_h then new_win_y = vp_y + vp_h - new_max_bounds.win_h end
+          end
+          
+          reaper.ImGui_SetNextWindowPos(ctx, new_win_x, new_win_y, reaper.ImGui_Cond_Always())
+          R.last_window_x = new_win_x
+          R.last_window_y = new_win_y
+        end
+      end
+    end
+    
     draw.draw(R, should_update)
   end
   
@@ -352,6 +457,11 @@ function M.cleanup(opts)
     end
     R.key = nil
     R.script_start_time = nil
+  end
+
+  -- 【性能优化】清理子菜单缓存池
+  if submenu_cache and submenu_cache.clear then
+    submenu_cache.clear()
   end
 
   if R.ctx then
@@ -500,3 +610,4 @@ function M.run()
 end
 
 return M
+
