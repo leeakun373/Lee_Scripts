@@ -7,19 +7,19 @@
 
 return {
   -- Schema/version marker for maintenance & migrations
-  CONFIG_SCHEMA_VERSION = "1.1.7",
+  CONFIG_SCHEMA_VERSION = "1.1.10",
 
   -- Config version stored in config.json (kept for backward compatibility)
-  version = "1.1.7",
+  version = "1.1.10",
 
   -- 菜单外观设置
   menu = {
-    outer_radius = 90, -- 轮盘外半径
-    inner_radius = 25, -- 中心圆半径（死区）
+    outer_radius = 100, -- 轮盘外半径
+    inner_radius = 35, -- 中心圆半径（死区）
     sector_border_width = 2, -- 扇区边框宽度
     hover_brightness = 1.3, -- 悬停时亮度增加倍数
     animation_speed = 0.2, -- 动画速度
-    max_slots_per_sector = 9, -- 每个扇区最大槽位数（历史字段，运行时/编辑器会动态扩展显示）
+    max_slots_per_sector = 12, -- 每个扇区最大槽位数（默认 3x4 网格，运行时/编辑器会动态扩展显示）
     hover_to_open = true, -- 悬停打开子菜单（true = 悬停打开，false = 点击打开）
 
     -- Sector Expansion Settings
@@ -30,6 +30,10 @@ return {
     -- Submenu slot size
     slot_width = 65, -- 子菜单插槽宽度（像素）
     slot_height = 25, -- 子菜单插槽高度（像素）
+
+    -- Submenu layout parameters
+    submenu_gap = 3, -- 子菜单按钮之间的间距（像素）
+    submenu_padding = 10, -- 子菜单窗口内边距（按钮距离窗口边缘的距离，像素）
 
     animation = {
       enable = true, -- 是否启用动画

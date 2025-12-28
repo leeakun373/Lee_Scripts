@@ -1,7 +1,7 @@
 -- @description RadialMenu Tool - 网格编辑器模块
 -- @author Lee
 -- @about
---   子菜单网格编辑器：3x3 网格布局，支持拖放和交换
+--   子菜单网格编辑器：4x3 网格布局，支持拖放和交换
 
 local M = {}
 
@@ -32,17 +32,17 @@ function M.draw(ctx, sector, state)
         sector.slots = {}
     end
     
-    -- 计算需要显示的插槽数量（至少9个，可扩展）
-    local min_slots = 9
+    -- 计算需要显示的插槽数量（至少12个，可扩展）
+    local min_slots = 12
     local current_slot_count = #sector.slots
     local display_count = math.max(min_slots, current_slot_count)
     
-    -- 3列网格布局（严格对齐）
-    local cols = 3
+    -- 4列网格布局（严格对齐）
+    local cols = 4
     local spacing = 8  -- 列间距
     local btn_h = 40  -- 固定按钮高度，更好的视觉效果
     
-    -- 计算按钮宽度（动态适应3列）
+    -- 计算按钮宽度（动态适应4列）
     local avail_w = reaper.ImGui_GetContentRegionAvail(ctx)
     local btn_w = (avail_w - (spacing * (cols - 1))) / cols
     

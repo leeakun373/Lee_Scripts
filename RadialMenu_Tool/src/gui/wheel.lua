@@ -93,7 +93,12 @@ function M.draw_wheel(ctx, config, active_sector_id, is_pinned, anim_scale, sect
     -- 检查动画是否启用
     local expansion_enabled = (config.menu.enable_sector_expansion ~= false)
     
-    for i, sector in ipairs(config.sectors) do
+    -- 【第三阶段修复】容错检查：如果扇区数量无效，跳过绘制，避免除零错误
+    local total_sectors = #config.sectors
+    if total_sectors < 1 then
+        -- 无效配置，不绘制任何扇区
+    else
+        for i, sector in ipairs(config.sectors) do
         -- 【修复】确保 ID 比较正确，避免所有扇区都被高亮
         local is_hovered = (hovered_sector_id ~= nil and tostring(hovered_sector_id) == tostring(sector.id))
         -- 只要 active_id 匹配，就强制高亮 (视觉连接) - 用于子菜单激活时的高亮
@@ -133,7 +138,8 @@ function M.draw_wheel(ctx, config, active_sector_id, is_pinned, anim_scale, sect
         -- 计算此扇区的动态外半径
         local current_sector_outer = base_outer_radius + expansion_pixels
         
-        M.draw_sector(draw_list, ctx, center_x, center_y, sector, i, #config.sectors, is_hovered, is_active, config, inner_radius, current_sector_outer, expansion_progress)
+        M.draw_sector(draw_list, ctx, center_x, center_y, sector, i, total_sectors, is_hovered, is_active, config, inner_radius, current_sector_outer, expansion_progress)
+        end
     end
     
     -- 3. 绘制中心圆 (甜甜圈效果) - 【已禁用】取消内圈图像绘制
@@ -532,18 +538,28 @@ function M.get_hovered_sector(mouse_x, mouse_y, center_x, center_y, config)
     
     -- 遍历所有扇区，看鼠标角度落在哪一个里面
     local num_sectors = #config.sectors
-    local step = (2 * math.pi) / num_sectors
-    local start_offset = -math.pi / 2  -- 从上方（-90度）开始分布
     
-    for i = 1, num_sectors do
-        local ang_min = start_offset + (i - 1) * step
-        local ang_max = start_offset + i * step
+    -- 【第三阶段修复】容错检查：如果扇区数量无效，直接返回 nil
+    if num_sectors < 1 then
+        return nil
+    elseif num_sectors == 1 then
+        -- 【第三阶段修复】单扇区特殊处理：直接返回唯一扇区，避免循环判定问题
+        return config.sectors[1]
+    else
+        -- 多扇区正常处理
+        local step = (2 * math.pi) / num_sectors
+        local start_offset = -math.pi / 2  -- 从上方（-90度）开始分布
         
-        -- 【关键点】用数学判断，而不是 UI 碰撞
-        if math_utils.angle_in_range(mouse_angle, ang_min, ang_max) then
-            -- 找到了就返回，不用再算别的了
-            -- 注意：这里不检查距离上限，实现"无限外延"效果
-            return config.sectors[i]
+        for i = 1, num_sectors do
+            local ang_min = start_offset + (i - 1) * step
+            local ang_max = start_offset + i * step
+            
+            -- 【关键点】用数学判断，而不是 UI 碰撞
+            if math_utils.angle_in_range(mouse_angle, ang_min, ang_max) then
+                -- 找到了就返回，不用再算别的了
+                -- 注意：这里不检查距离上限，实现"无限外延"效果
+                return config.sectors[i]
+            end
         end
     end
     

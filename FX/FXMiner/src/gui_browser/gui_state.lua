@@ -101,8 +101,10 @@ local function load_user_config(Config)
   local ok, data = pcall(function() return json.decode(content) end)
   if ok and type(data) == "table" then
     -- Load team publish path
-    if data.team_publish_path and data.team_publish_path ~= "" then
-      Config.TEAM_PUBLISH_PATH = data.team_publish_path
+    if data.team_publish_path ~= nil then
+      -- Trim whitespace and ensure it's a string
+      local path = tostring(data.team_publish_path):gsub("^%s+", ""):gsub("%s+$", "")
+      Config.TEAM_PUBLISH_PATH = path
       -- IMPORTANT: Clear TEAM_DB_PATH so get_team_db_path() will derive it from TEAM_PUBLISH_PATH
       -- Set to empty string (not nil) to ensure get_team_db_path() uses TEAM_PUBLISH_PATH
       Config.TEAM_DB_PATH = ""
@@ -115,8 +117,14 @@ local function save_user_config(Config)
   local config_path = get_user_config_path(Config)
   if not config_path then return false end
   
+  -- Ensure path is properly saved (normalize before saving)
+  local path_to_save = Config.TEAM_PUBLISH_PATH or ""
+  if path_to_save ~= "" then
+    path_to_save = path_to_save:gsub("^%s+", ""):gsub("%s+$", "")
+  end
+  
   local data = {
-    team_publish_path = Config.TEAM_PUBLISH_PATH or "",
+    team_publish_path = path_to_save,
   }
   
   local ok, json_str = pcall(function() return json.encode(data) end)

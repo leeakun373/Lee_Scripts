@@ -1,5 +1,5 @@
 -- @description Lee Radial Menu Tool
--- @version 1.1.9
+-- @version 1.1.10
 -- @author Lee
 -- @about
 --   Powerful customizable radial menu tool for REAPER
@@ -11,11 +11,12 @@
 --   - Text line caching for wheel rendering
 --   - Pre-bake system for submenu layout (zero-cost rendering after first frame)
 --   
---   Recent Updates (v1.1.9):
---   - Submenu layout parameters (independent size, button gap, window padding)
---   - Complete internationalization support (Chinese/English switching)
---   - Fixed submenu button overflow issues
---   - Improved UI parameter controls in Setup interface
+--   Recent Updates (v1.1.10):
+--   - Fixed window position drift when right-clicking to toggle management mode
+--   - Window position now stays at initial invocation point (no repositioning on mode switch)
+--   - Added reposition freeze protection (0.1s) to prevent submenu flicker during mode transitions
+--   - Improved preset creation: blank presets now start with 2 sectors minimum
+--   - Extended right-click detection area to entire inner circle (not just invisible button)
 -- @provides
 --   [main] .
 --   [main] Lee_RadialMenu_Setup.lua
@@ -64,9 +65,19 @@ end
 -- ============================================================================
 -- Version Information (Update BUILD_NUMBER after each modification)
 -- ============================================================================
-local VERSION = "1.1.8"
-local BUILD_DATE = "2025-12-19"  -- Update this date after each modification
-local BUILD_NUMBER = "007"  -- Increment this number after each modification (001, 002, 003...)
+local VERSION = "1.1.10"
+local BUILD_DATE = "2025-01-20"  -- Update this date after each modification
+local BUILD_NUMBER = "010"  -- Increment this number after each modification (001, 002, 003...)
+
+-- ============================================================================
+-- Development Log
+-- ============================================================================
+-- v1.1.10 (2025-01-20):
+--   - Fixed window position stability: window stays at initial invocation point when switching modes
+--   - Added reposition freeze protection (0.1s) to prevent submenu flicker during transitions
+--   - Improved preset creation: blank presets now start with 2 sectors (minimum)
+--   - Extended right-click detection to entire inner circle area
+--   - Removed redundant coordinate capture on mode switches
 
 -- ============================================================================
 -- Phase 1 - 依赖检查
@@ -125,6 +136,10 @@ end
 
 -- 主入口函数
 function main()
+    -- 记录启动日志
+    local log_msg = string.format("[RadialMenu] v%s started at %s", VERSION, os.date("%Y-%m-%d %H:%M:%S"))
+    reaper.ShowConsoleMsg(log_msg .. "\n")
+    
     -- 检查依赖
     if not check_dependencies() then
         return
@@ -133,34 +148,35 @@ function main()
     -- 设置路径
     setup_paths()
     
-    -- 加载配置管理器（测试 Phase 1）
+    -- 加载配置管理器
     local success, config_manager = pcall(require, "config_manager")
     if not success then
-        reaper.ShowMessageBox(
-            "错误: 无法加载配置管理器\n" .. tostring(config_manager),
-            "加载错误", 0
-        )
+        local error_msg = "错误: 无法加载配置管理器\n" .. tostring(config_manager)
+        reaper.ShowConsoleMsg("[RadialMenu] ERROR: " .. error_msg .. "\n")
+        reaper.ShowMessageBox(error_msg, "加载错误", 0)
         return
     end
     
     -- 加载配置
     local config = config_manager.load()
     if not config then
-        reaper.ShowMessageBox("错误: 无法加载配置文件", "配置错误", 0)
+        local error_msg = "错误: 无法加载配置文件"
+        reaper.ShowConsoleMsg("[RadialMenu] ERROR: " .. error_msg .. "\n")
+        reaper.ShowMessageBox(error_msg, "配置错误", 0)
         return
     end
     
     -- 加载主运行时
     local success_runtime, main_runtime = pcall(require, "main_runtime")
     if not success_runtime then
-        reaper.ShowMessageBox(
-            "错误: 无法加载主运行时\n" .. tostring(main_runtime),
-            "加载错误", 0
-        )
+        local error_msg = "错误: 无法加载主运行时\n" .. tostring(main_runtime)
+        reaper.ShowConsoleMsg("[RadialMenu] ERROR: " .. error_msg .. "\n")
+        reaper.ShowMessageBox(error_msg, "加载错误", 0)
         return
     end
     
     -- 启动主运行时
+    reaper.ShowConsoleMsg("[RadialMenu] Starting main runtime...\n")
     main_runtime.run()
 end
 
@@ -172,8 +188,7 @@ end
 local success, error_msg = pcall(main)
 
 if not success then
-    reaper.ShowMessageBox(
-        "RadialMenu Tool 启动失败:\n\n" .. tostring(error_msg),
-        "错误", 0
-    )
+    local error_display = "RadialMenu Tool 启动失败:\n\n" .. tostring(error_msg)
+    reaper.ShowConsoleMsg("[RadialMenu] FATAL ERROR: " .. tostring(error_msg) .. "\n")
+    reaper.ShowMessageBox(error_display, "错误", 0)
 end

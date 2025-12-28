@@ -149,13 +149,14 @@ local function draw_simple_preview(draw_list, ctx, center_x, center_y, preview_c
     end
     
     -- 2. 绘制中心圆 (甜甜圈效果 - 关键修正部分)
-    local center_outer = inner_radius
-    local center_inner = center_outer - 6
-    local dark_grey = styles.correct_rgba_to_u32({63, 60, 64, 255})
-    local inner_grey = styles.correct_rgba_to_u32({50, 47, 51, 255})
-    
-    reaper.ImGui_DrawList_AddCircleFilled(draw_list, center_x, center_y, center_outer, dark_grey, 0)
-    reaper.ImGui_DrawList_AddCircleFilled(draw_list, center_x, center_y, center_inner, inner_grey, 0)
+    -- [已移除] 中心圆绘制，只保留 Pin 菱形
+    -- local center_outer = inner_radius
+    -- local center_inner = center_outer - 6
+    -- local dark_grey = styles.correct_rgba_to_u32({63, 60, 64, 255})
+    -- local inner_grey = styles.correct_rgba_to_u32({50, 47, 51, 255})
+    -- 
+    -- reaper.ImGui_DrawList_AddCircleFilled(draw_list, center_x, center_y, center_outer, dark_grey, 0)
+    -- reaper.ImGui_DrawList_AddCircleFilled(draw_list, center_x, center_y, center_inner, inner_grey, 0)
     
     -- 3. 绘制中心 Pin 菱形 (关键修正部分)
     local pin_size = styles.sizes.pin_size or 6
@@ -216,13 +217,27 @@ function M.draw(ctx, config, state, callbacks)
                    tostring(#sectors) .. '|' ..
                    tostring(menu.inner_radius or '') .. '|' ..
                    tostring(menu.outer_radius or '') .. '|' ..
+                   tostring(menu.hover_expansion_pixels or '') .. '|' ..
+                   tostring(menu.enable_sector_expansion or '') .. '|' ..
                    tostring(sectors_sig)
+        
+        -- 计算缩放比例（用于预览显示和提示）
+        local padding = 10
+        local max_radius = math.min(w, h) * 0.5 - padding
+        local base_outer = (config.menu and config.menu.outer_radius) or 200
+        local base_inner = (config.menu and config.menu.inner_radius) or 50
+        local scale = 1.0
+        if base_outer > 0 then
+            scale = math.min(1.0, max_radius / base_outer)
+        end
         
         -- [PERF] 只有当 key 变化时才重新 deep_copy
         if key ~= vis_cache_key then
             vis_cache = deep_copy_config(config)
-            vis_cache.menu.outer_radius = 80  -- Fixed visual size
-            vis_cache.menu.inner_radius = 25
+            
+            -- 预览缩放：保证不溢出，只做相对参考显示
+            vis_cache.menu.outer_radius = base_outer * scale
+            vis_cache.menu.inner_radius = base_inner * scale
             vis_cache_key = key
         end
         
@@ -232,6 +247,13 @@ function M.draw(ctx, config, state, callbacks)
         -- Draw preview
         local draw_list = reaper.ImGui_GetWindowDrawList(ctx)
         draw_simple_preview(draw_list, ctx, center_x, center_y, vis_config, state.selected_sector_index)
+        
+        -- 可选：如果缩放小于1，显示提示（淡色，不影响功能）
+        if scale < 1.0 then
+            local hint = "Preview scaled"
+            local hint_color = styles.correct_rgba_to_u32({180, 180, 180, 160})
+            reaper.ImGui_DrawList_AddText(draw_list, px + 6, py + 6, hint_color, hint)
+        end
         
         -- 检测预览区域的鼠标点击，选择扇区
         if reaper.ImGui_IsWindowHovered(ctx) and reaper.ImGui_IsMouseClicked(ctx, 0) then
@@ -342,7 +364,7 @@ function M.draw(ctx, config, state, callbacks)
         -- A. Sector Count (Moved to Top of Global)
         reaper.ImGui_Text(ctx, i18n.t("sector_count"))
         local sector_count = #config.sectors
-        local sector_count_changed, new_count = reaper.ImGui_SliderInt(ctx, "##SectorCount", sector_count, 1, 8, "%d")
+        local sector_count_changed, new_count = reaper.ImGui_SliderInt(ctx, "##SectorCount", sector_count, 2, 8, "%d")
         if sector_count_changed and new_count ~= sector_count then
             if callbacks and callbacks.adjust_sector_count then
                 callbacks.adjust_sector_count(new_count)
@@ -398,7 +420,6 @@ function M.draw(ctx, config, state, callbacks)
         reaper.ImGui_TextDisabled(ctx, i18n.t("submenu_button_size"))
         
         reaper.ImGui_Text(ctx, i18n.t("button_width"))
-        reaper.ImGui_SameLine(ctx)
         local slot_w = config.menu.slot_width or 65
         local w_changed, new_w = reaper.ImGui_SliderInt(ctx, "##SlotWidth", slot_w, 60, 150, "%d px")
         if w_changed then
@@ -407,7 +428,6 @@ function M.draw(ctx, config, state, callbacks)
         end
         
         reaper.ImGui_Text(ctx, i18n.t("button_height"))
-        reaper.ImGui_SameLine(ctx)
         local slot_h = config.menu.slot_height or 25
         local h_changed, new_h = reaper.ImGui_SliderInt(ctx, "##SlotHeight", slot_h, 24, 60, "%d px")
         if h_changed then
@@ -421,20 +441,26 @@ function M.draw(ctx, config, state, callbacks)
         reaper.ImGui_TextDisabled(ctx, i18n.t("submenu_layout"))
         
         reaper.ImGui_Text(ctx, i18n.t("button_gap"))
-        reaper.ImGui_SameLine(ctx)
         local submenu_gap = config.menu.submenu_gap or 3
         local gap_changed, new_gap = reaper.ImGui_SliderInt(ctx, "##SubmenuGap", submenu_gap, 1, 10, "%d px")
         if gap_changed then
             config.menu.submenu_gap = new_gap
+            local submenu_cache = require("gui.submenu_cache")
+            local submenu_bake_cache = require("gui.submenu_bake_cache")
+            submenu_cache.clear()
+            submenu_bake_cache.clear()
             state.is_modified = true
         end
         
         reaper.ImGui_Text(ctx, i18n.t("window_padding"))
-        reaper.ImGui_SameLine(ctx)
         local submenu_padding = config.menu.submenu_padding or 4
         local padding_changed, new_padding = reaper.ImGui_SliderInt(ctx, "##SubmenuPadding", submenu_padding, 2, 15, "%d px")
         if padding_changed then
             config.menu.submenu_padding = new_padding
+            local submenu_cache = require("gui.submenu_cache")
+            local submenu_bake_cache = require("gui.submenu_bake_cache")
+            submenu_cache.clear()
+            submenu_bake_cache.clear()
             state.is_modified = true
         end
         

@@ -90,15 +90,25 @@ function M.handle_sector_click(R, center_x, center_y, inner_radius, outer_radius
         if click_angle < 0 then click_angle = click_angle + 2 * math.pi end
         
         local num_sectors = #draw_config.sectors
-        local step = (2 * math.pi) / num_sectors
-        local start_offset = -math.pi / 2
         
-        for i = 1, num_sectors do
-          local ang_min = start_offset + (i - 1) * step
-          local ang_max = start_offset + i * step
-          if math_utils.angle_in_range(click_angle, ang_min, ang_max) then
-            hovered_id = draw_config.sectors[i].id
-            break
+        -- 【第三阶段修复】容错检查：如果扇区数量无效，直接跳过
+        if num_sectors < 1 then
+          -- 无效配置，不激活任何扇区
+        elseif num_sectors == 1 then
+          -- 【第三阶段修复】单扇区特殊处理：直接激活唯一扇区
+          hovered_id = draw_config.sectors[1].id
+        else
+          -- 多扇区正常处理
+          local step = (2 * math.pi) / num_sectors
+          local start_offset = -math.pi / 2
+          
+          for i = 1, num_sectors do
+            local ang_min = start_offset + (i - 1) * step
+            local ang_max = start_offset + i * step
+            if math_utils.angle_in_range(click_angle, ang_min, ang_max) then
+              hovered_id = draw_config.sectors[i].id
+              break
+            end
           end
         end
       end
@@ -195,25 +205,60 @@ function M.draw(R, should_update)
   local active_sector_id = nil
   local inner_radius_sq = inner_radius * inner_radius
   
+  -- 【切换保护】如果在重定位后的0.1秒内，强制禁用扇区判定，防止切换模式时子菜单瞬间闪现
+  local time_since_reposition = reaper.time_precise() - (R.last_reposition_time or 0)
+  local is_repositioning = (time_since_reposition < 0.1)
+  
+  -- 【第三阶段修复】判定保护：在切换预设或管理模式瞬间，如果鼠标位置正好处于新旧扇区的交界处，
+  -- 使用上一帧的 active_sector_id 作为后备，防止 active_sector_id 在切换帧变为 nil
+  local last_active_sector_id = R.last_hover_sector_id
+  
   -- 只有出了内圈才开始算（实现 Sexan 的"无限外延"且"中间有死区"）
   -- 不检查外圈上限，这样鼠标在轮盘外也能根据方向判断扇区
-  if dist_sq > inner_radius_sq and draw_config.sectors then
+  -- 【切换保护】如果在重定位期间，跳过扇区判定
+  if not is_repositioning and dist_sq > inner_radius_sq and draw_config.sectors then
     local num_sectors = #draw_config.sectors
-    local step = (2 * math.pi) / num_sectors
-    local start_offset = -math.pi / 2  -- 从上方（-90度）开始分布
     
-    -- 遍历所有扇区，看鼠标角度落在哪一个里面
-    for i = 1, num_sectors do
-      local ang_min = start_offset + (i - 1) * step
-      local ang_max = start_offset + i * step
+    -- 【第三阶段修复】容错检查：如果扇区数量无效，直接跳过
+    if num_sectors < 1 then
+      -- 无效配置，不激活任何扇区
+    elseif num_sectors == 1 then
+      -- 【第三阶段修复】单扇区特殊处理：直接激活唯一扇区，避免循环判定问题
+      active_sector = draw_config.sectors[1]
+      active_sector_id = active_sector.id
+    else
+      -- 多扇区正常处理
+      local step = (2 * math.pi) / num_sectors
+      local start_offset = -math.pi / 2  -- 从上方（-90度）开始分布
       
-      -- 【关键点】用数学判断，而不是 UI 碰撞
-      -- 只判断角度，不判断距离上限，实现"无限外延"效果
-      -- 【修复】确保只匹配一个扇区，找到后立即退出
-      if math_utils.angle_in_range(mouse_angle, ang_min, ang_max) then
-        active_sector = draw_config.sectors[i]
-        active_sector_id = active_sector.id
-        break  -- 【关键】找到了就立即退出，确保只有一个扇区被激活
+      -- 遍历所有扇区，看鼠标角度落在哪一个里面
+      for i = 1, num_sectors do
+        local ang_min = start_offset + (i - 1) * step
+        local ang_max = start_offset + i * step
+        
+        -- 【关键点】用数学判断，而不是 UI 碰撞
+        -- 只判断角度，不判断距离上限，实现"无限外延"效果
+        -- 【修复】确保只匹配一个扇区，找到后立即退出
+        if math_utils.angle_in_range(mouse_angle, ang_min, ang_max) then
+          active_sector = draw_config.sectors[i]
+          active_sector_id = active_sector.id
+          break  -- 【关键】找到了就立即退出，确保只有一个扇区被激活
+        end
+      end
+    end
+  end
+  
+  -- 【第三阶段修复】判定保护：如果计算出的 active_sector_id 为 nil，但上一帧有有效的 active_sector_id，
+  -- 且鼠标仍在有效范围内，则使用上一帧的值作为后备，防止切换帧时的焦点漂移
+  if active_sector_id == nil and last_active_sector_id ~= nil and dist_sq > inner_radius_sq then
+    -- 验证上一帧的扇区ID是否仍然存在于当前配置中
+    if draw_config.sectors then
+      for _, sector in ipairs(draw_config.sectors) do
+        if tostring(sector.id) == tostring(last_active_sector_id) then
+          active_sector = sector
+          active_sector_id = sector.id
+          break
+        end
       end
     end
   end
@@ -295,10 +340,42 @@ function M.draw(R, should_update)
   -- 窗口拖拽功能已完全禁用，确保拖拽扇区时不会移动轮盘
   -- ============================================================
 
-  -- 右键点击检测（用于管理模式）
-  if reaper.ImGui_IsItemClicked(ctx, 1) then -- 1 = Right Button
-    local controller = require("runtime.controller")
-    controller.toggle_management_mode()
+  -- ============================================================
+  -- 【修改：内圆全域右键响应】
+  -- 不再只依赖 InvisibleButton，直接通过数学距离判断
+  -- ============================================================
+  local screen_mouse_x, screen_mouse_y = reaper.GetMousePosition()
+  local mouse_x, mouse_y = reaper.ImGui_PointConvertNative(ctx, screen_mouse_x, screen_mouse_y)
+  local dx = mouse_x - center_x
+  local dy = mouse_y - center_y
+  local dist_sq = dx * dx + dy * dy
+  local inner_radius_sq = inner_radius * inner_radius
+
+  -- 如果鼠标在内圆范围内
+  if dist_sq <= inner_radius_sq then
+    -- 检测右键点击 (1 = Right Button)
+    if reaper.ImGui_IsMouseClicked(ctx, 1) then
+      -- 【优化】不再更新 target_gui_pos，保持窗口位置不动
+      -- 仅设置 force_reposition 标记，让系统基于原有的 target_gui_pos 重新计算窗口偏移
+      R.force_reposition = true
+      R.last_reposition_time = reaper.time_precise()  -- 记录重定位时间，防止切换时误触发子菜单
+      
+      -- 清理缓存，强制重新烘焙
+      local submenu_bake_cache = require("gui.submenu_bake_cache")
+      local submenu_cache = require("gui.submenu_cache")
+      submenu_bake_cache.clear()
+      submenu_cache.clear()
+      
+      -- 如果已经在管理模式下，右键点击中心点应该退出管理模式
+      -- 如果不在管理模式下，右键点击中心点进入管理模式
+      local controller = require("runtime.controller")
+      controller.toggle_management_mode()
+      
+      -- 清除子菜单状态
+      R.clicked_sector = nil
+      R.show_submenu = false
+      R.last_hover_sector_id = nil
+    end
   end
 
   -- 左键点击检测：切换 Pin 状态或退出管理模式
@@ -306,8 +383,23 @@ function M.draw(R, should_update)
   if reaper.ImGui_IsItemDeactivated(ctx) then
     -- 在管理模式下，左键点击中心退出管理模式
     if R.management_mode then
+      -- 【优化】不再更新 target_gui_pos，保持窗口位置不动
+      R.force_reposition = true
+      R.last_reposition_time = reaper.time_precise()  -- 记录重定位时间，防止切换时误触发子菜单
+      
+      -- 清理缓存，强制重新烘焙
+      local submenu_bake_cache = require("gui.submenu_bake_cache")
+      local submenu_cache = require("gui.submenu_cache")
+      submenu_bake_cache.clear()
+      submenu_cache.clear()
+      
       local controller = require("runtime.controller")
       controller.toggle_management_mode()
+      
+      -- 清除子菜单状态
+      R.clicked_sector = nil
+      R.show_submenu = false
+      R.last_hover_sector_id = nil
     else
       R.is_pinned = not R.is_pinned
     end

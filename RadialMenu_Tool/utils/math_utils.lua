@@ -77,7 +77,16 @@ end
 -- 魔法数字 0.005 是为了防止浮点数精度误差导致的边缘闪烁
 function M.angle_in_range(angle, lower, upper)
     local pi = math.pi
-    return (angle - lower + 0.005) % (2 * pi) <= (upper - 0.005 - lower) % (2 * pi)
+    local two_pi = 2 * pi
+    
+    -- 【第三阶段修复】单扇区特殊处理：当范围跨度接近 2π 时，直接返回 true
+    -- 这解决了单扇区死锁问题（当 total_sectors == 1 时）
+    local range_span = (upper - lower) % two_pi
+    if range_span >= two_pi - 0.01 then  -- 允许小的浮点误差
+        return true  -- 单扇区覆盖整个圆，任何角度都应该匹配
+    end
+    
+    return (angle - lower + 0.005) % two_pi <= (upper - 0.005 - lower) % two_pi
 end
 
 -- 角度转弧度
@@ -200,6 +209,12 @@ end
 -- sector_index: 1-based 索引
 function M.get_sector_angles(sector_index, num_sectors, rotation_offset)
     rotation_offset = rotation_offset or -math.pi / 2  -- 默认从顶部开始（-90度）
+    
+    -- 【第三阶段修复】单扇区特殊处理：确保覆盖完整的 2π 范围
+    if num_sectors == 1 then
+        -- 单扇区时，起始角度为 -π/2，结束角度为 3π/2，覆盖完整的 2π 范围
+        return rotation_offset, rotation_offset + 2 * math.pi
+    end
     
     local angle_per_sector = (2 * math.pi) / num_sectors
     

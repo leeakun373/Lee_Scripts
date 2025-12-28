@@ -33,8 +33,12 @@ function GuiSettings.draw(ctx)
   ImGui.Text(ctx, "Path: " .. (Config.DB_PATH or ""))
   
   if ImGui.Button(ctx, "Rescan All Files") then
-    DB:refresh_db_from_disk(state.status)
-    state.status = "Rescan started..."
+    state.status = "Rescanning..."
+    -- Perform full scan and prune to remove ghost files
+    DB:scan_fxchains()
+    DB:prune_missing_files()
+    DB:load() -- Reload local DB
+    state.status = "Rescan completed."
   end
 
   ImGui.Spacing(ctx)
@@ -50,9 +54,14 @@ function GuiSettings.draw(ctx)
   end
   
   if ImGui.Button(ctx, "Save Configuration") then
-    Config.TEAM_PUBLISH_PATH = state.settings_team_path
+    -- Trim whitespace from path
+    local path_to_save = (state.settings_team_path or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    Config.TEAM_PUBLISH_PATH = path_to_save
+    
     if save_config_func then
       if save_config_func(Config) then
+        -- Update state to reflect saved value
+        state.settings_team_path = Config.TEAM_PUBLISH_PATH or ""
         state.status = "Settings saved."
       else
         state.status = "Error saving settings."

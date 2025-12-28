@@ -45,7 +45,7 @@ function M.preserve_slot_positions(config)
         end
       end
 
-      local max_index = math.max(config.menu.max_slots_per_sector or 9, real_max)
+      local max_index = math.max(config.menu.max_slots_per_sector or 12, real_max)
       local fixed_slots = {}
 
       for i = 1, max_index do

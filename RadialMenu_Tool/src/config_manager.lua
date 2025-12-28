@@ -429,27 +429,30 @@ end
 
 -- A) Return a clean config template (does NOT save)
 function M.create_blank_config()
+  -- 创建一个真正的空白配置，使用默认值的基本结构
   local cfg = M.get_default()
 
-  -- Reset to 1 sector, 12 empty slots
-  local slots = {}
-  for _ = 1, 12 do
-    table.insert(slots, { type = "empty" })
-  end
-
-  local default_sector_color = (DEFAULTS.sectors and DEFAULTS.sectors[1] and DEFAULTS.sectors[1].color) or { 70, 130, 180, 200 }
-  local default_sector_icon = (DEFAULTS.sectors and DEFAULTS.sectors[1] and DEFAULTS.sectors[1].icon) or ""
-
-  cfg.sectors = {
-    {
-      id = 1,
-      name = "Sector 1",  -- 使用固定格式，避免语言依赖
+  -- 创建2个空扇区（每个扇区12个空槽位）
+  local sectors = {}
+  for i = 1, 2 do
+    local slots = {}
+    for _ = 1, 12 do
+      table.insert(slots, { type = "empty" })
+    end
+    
+    local default_sector_color = (DEFAULTS.sectors and DEFAULTS.sectors[i] and DEFAULTS.sectors[i].color) or { 70, 130, 180, 200 }
+    local default_sector_icon = (DEFAULTS.sectors and DEFAULTS.sectors[i] and DEFAULTS.sectors[i].icon) or ""
+    
+    table.insert(sectors, {
+      id = i,
+      name = "Sector " .. i,  -- 使用固定格式，避免语言依赖
       icon = default_sector_icon,
       color = M.deep_copy_config(default_sector_color),
       slots = slots,
-    },
-  }
+    })
+  end
 
+  cfg.sectors = sectors
   return cfg
 end
 
@@ -665,7 +668,7 @@ function M.add_slot_to_sector(config, sector_id, slot)
     return false, "扇区不存在"
   end
 
-  local max_slots = (config and config.menu and config.menu.max_slots_per_sector) or 9
+  local max_slots = (config and config.menu and config.menu.max_slots_per_sector) or 12
   if #sector.slots >= max_slots then
     return false, "扇区槽位已满"
   end

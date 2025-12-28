@@ -25,7 +25,13 @@ RadialMenu_Tool/
 │   ├── config_manager.lua             # 配置读写/默认值/迁移；写入 ConfigUpdated 触发热重载
 │   ├── gui/
 │   │   ├── wheel.lua                  # 轮盘扇区绘制与 hover 计算
-│   │   ├── list_view.lua              # 子菜单列表（点击/拖拽状态）
+│   │   ├── list_view.lua              # 子菜单列表（主入口，协调各模块）
+│   │   ├── list_view_layout.lua       # 子菜单布局计算（尺寸、位置）
+│   │   ├── list_view_button.lua        # 子菜单按钮绘制（单个按钮、网格、颜色）
+│   │   ├── list_view_interaction.lua   # 子菜单交互处理（点击、拖拽反馈）
+│   │   ├── list_view_cached.lua        # 子菜单烘焙缓存绘制（极速模式）
+│   │   ├── submenu_cache.lua           # 子菜单缓存（位置、尺寸）
+│   │   ├── submenu_bake_cache.lua     # 子菜单烘焙缓存（预计算布局）
 │   │   └── styles.lua                 # ImGui 样式/颜色
 │   ├── logic/
 │   │   ├── execution.lua              # 插槽执行引擎（action/fx/chain/template + drop）
@@ -56,6 +62,13 @@ RadialMenu_Tool/
 ```
 
 > 说明：本次拆分后，`src/runtime/*` 负责运行时，`src/settings/*` 负责设置编辑器，`src/gui/*` 只做渲染与输入命中测试。
+> 
+> **子菜单模块拆分说明**：`list_view.lua` 已拆分为多个模块以提高可维护性：
+> - `list_view.lua`：主入口，协调各模块，管理状态
+> - `list_view_layout.lua`：布局计算（尺寸、位置）
+> - `list_view_button.lua`：按钮绘制（单个按钮、网格、颜色管理）
+> - `list_view_interaction.lua`：交互处理（点击、拖拽反馈）
+> - `list_view_cached.lua`：烘焙缓存绘制（极速模式，无计算只画图）
 
 ### require 约定（避免撞名）
 
@@ -103,7 +116,10 @@ RadialMenu_Tool/
 - **长按快捷键/松开行为异常**：`src/runtime/controller.lua`（track_shortcut_key / defer_release_key_and_running） + `src/runtime/input.lua`
 - **轮盘 hover 命中不对/角度错位**：`src/gui/wheel.lua` + `utils/math_utils.lua`
 - **点击扇区/子菜单显示隐藏逻辑异常**：`src/runtime/draw.lua`（handle_sector_click / auto-hide submenu）
-- **拖拽/放置行为异常**：`src/gui/list_view.lua`（drag 状态）+ `src/logic/execution.lua`（handle_drop）
+- **拖拽/放置行为异常**：`src/gui/list_view_interaction.lua`（交互处理）+ `src/logic/execution.lua`（handle_drop）
+- **子菜单布局/位置异常**：`src/gui/list_view_layout.lua`（布局计算）
+- **子菜单按钮绘制异常**：`src/gui/list_view_button.lua`（按钮绘制）
+- **子菜单烘焙缓存异常**：`src/gui/list_view_cached.lua`（缓存绘制）
 - **设置编辑器按钮/状态不同步**：`src/settings/state.lua`（唯一真源）与各 `tabs/*.lua` 的读写接口
 
 ### 建议的最小测试清单（修 bug 前/后都跑）

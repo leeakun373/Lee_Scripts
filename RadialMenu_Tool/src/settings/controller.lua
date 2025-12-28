@@ -474,7 +474,7 @@ function M.draw_preview_panel()
         -- A. Sector Count (Moved to Top of Global)
         reaper.ImGui_Text(ctx, "扇区数量:")
         local sector_count = #config.sectors
-        local sector_count_changed, new_count = reaper.ImGui_SliderInt(ctx, "##SectorCount", sector_count, 1, 8, "%d")
+        local sector_count_changed, new_count = reaper.ImGui_SliderInt(ctx, "##SectorCount", sector_count, 2, 8, "%d")
         if sector_count_changed and new_count ~= sector_count then
             M.adjust_sector_count(new_count)
             is_modified = true
@@ -532,7 +532,6 @@ function M.draw_preview_panel()
         reaper.ImGui_TextDisabled(ctx, i18n.t("submenu_button_size"))
         
         reaper.ImGui_Text(ctx, i18n.t("button_width"))
-        reaper.ImGui_SameLine(ctx)
         local slot_w = config.menu.slot_width or 65
         local w_changed, new_w = reaper.ImGui_SliderInt(ctx, "##SlotWidth", slot_w, 60, 150, "%d px")
         if w_changed then
@@ -541,7 +540,6 @@ function M.draw_preview_panel()
         end
         
         reaper.ImGui_Text(ctx, i18n.t("button_height"))
-        reaper.ImGui_SameLine(ctx)
         local slot_h = config.menu.slot_height or 25
         local h_changed, new_h = reaper.ImGui_SliderInt(ctx, "##SlotHeight", slot_h, 24, 60, "%d px")
         if h_changed then
@@ -555,20 +553,26 @@ function M.draw_preview_panel()
         reaper.ImGui_TextDisabled(ctx, i18n.t("submenu_layout"))
         
         reaper.ImGui_Text(ctx, i18n.t("button_gap"))
-        reaper.ImGui_SameLine(ctx)
         local submenu_gap = config.menu.submenu_gap or 3
         local gap_changed, new_gap = reaper.ImGui_SliderInt(ctx, "##SubmenuGap", submenu_gap, 1, 10, "%d px")
         if gap_changed then
             config.menu.submenu_gap = new_gap
+            local submenu_cache = require("gui.submenu_cache")
+            local submenu_bake_cache = require("gui.submenu_bake_cache")
+            submenu_cache.clear()
+            submenu_bake_cache.clear()
             is_modified = true
         end
         
         reaper.ImGui_Text(ctx, i18n.t("window_padding"))
-        reaper.ImGui_SameLine(ctx)
         local submenu_padding = config.menu.submenu_padding or 4
         local padding_changed, new_padding = reaper.ImGui_SliderInt(ctx, "##SubmenuPadding", submenu_padding, 2, 15, "%d px")
         if padding_changed then
             config.menu.submenu_padding = new_padding
+            local submenu_cache = require("gui.submenu_cache")
+            local submenu_bake_cache = require("gui.submenu_bake_cache")
+            submenu_cache.clear()
+            submenu_bake_cache.clear()
             is_modified = true
         end
         
@@ -767,8 +771,8 @@ function M.draw_submenu_grid(sector)
         sector.slots = {}
     end
     
-    -- 计算需要显示的插槽数量（至少9个，可扩展）
-    local min_slots = 9
+    -- 计算需要显示的插槽数量（至少12个，可扩展）
+    local min_slots = 12
     local current_slot_count = #sector.slots
     local display_count = math.max(min_slots, current_slot_count)
     
