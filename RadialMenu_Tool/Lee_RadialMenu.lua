@@ -1,5 +1,5 @@
 -- @description Lee Radial Menu Tool
--- @version 1.1.10
+-- @version 1.1.11
 -- @author Lee
 -- @about
 --   Powerful customizable radial menu tool for REAPER
@@ -11,7 +11,7 @@
 --   - Text line caching for wheel rendering
 --   - Pre-bake system for submenu layout (zero-cost rendering after first frame)
 --   
---   Changelog (v1.1.10):
+--   Changelog (v1.1.11):
 --   - Fixed window position stability: unified anchor system prevents position drift on mode switches
 --   - Implemented logic freeze mechanism: 3-frame suppression prevents ghosting during transitions
 --   - Fixed rendering artifacts: switched from PathFillConvex to PathStroke for concave sectors
@@ -66,9 +66,9 @@ end
 -- ============================================================================
 -- Version Information (Update BUILD_NUMBER after each modification)
 -- ============================================================================
-local VERSION = "1.1.10"
+local VERSION = "1.1.11"
 local BUILD_DATE = "2025-01-20"  -- Update this date after each modification
-local BUILD_NUMBER = "010"  -- Increment this number after each modification (001, 002, 003...)
+local BUILD_NUMBER = "011"  -- Increment this number after each modification (001, 002, 003...)
 
 -- ============================================================================
 -- Development Log
