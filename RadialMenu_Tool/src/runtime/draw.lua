@@ -466,31 +466,62 @@ function M.draw(R, should_update)
   M.handle_sector_click(R, center_x, center_y, inner_radius, outer_radius, is_submenu_hovered, draw_config)
 
   -- ============================================================
-  -- 7) Drag feedback + drop
+  -- 7) Manual Drag & Drop Management
   -- ============================================================
+  
+  -- [A] 捕获拖拽开始 (Latch)
+  -- 只要 ImGui 说在拖拽，我们就记录下来，防止后续 NoInputs 导致 ImGui 忘记状态
   if list_view.is_dragging() then
-    local dragging_slot = list_view.get_dragging_slot()
-    local draw_list = reaper.ImGui_GetWindowDrawList(ctx)
-    if draw_list and dragging_slot then
-      list_view.draw_drag_feedback(draw_list, ctx, dragging_slot)
-    end
+      R.drag_slot_latch = list_view.get_dragging_slot()
+  end
 
-    if not reaper.ImGui_IsMouseDown(ctx, 0) then
-      local screen_x, screen_y = reaper.GetMousePosition()
-      if screen_x and screen_y and dragging_slot then
-        execution.handle_drop(dragging_slot, screen_x, screen_y)
+  -- [B] 处理拖拽 (使用手动锁存的状态)
+  if R.drag_slot_latch then
+      local dragging_slot = R.drag_slot_latch
+      local draw_list = reaper.ImGui_GetWindowDrawList(ctx)
+      
+      -- 1. 绘制预览图 (即使穿透了窗口，绘图依然正常)
+      if draw_list then
+          list_view.draw_drag_feedback(draw_list, ctx, dragging_slot)
       end
-      list_view.reset_drag()
 
-      -- 【优化】Pin 模式下，拖拽结束视为操作完成，自动重置回圆环状态
-      -- 这样用户可以立即进行下一次操作，而不需要手动关闭子栏
-      if R.is_pinned then
-          R.clicked_sector = nil
-          R.show_submenu = false
-          R.last_hover_sector_id = nil
-          R.current_active_sector_id = nil
+      -- 2. 检测全局鼠标松开 (使用 JS_API 绕过 ImGui 的 Input 限制)
+      -- 1 = Left Button. 如果它不含 1，说明左键松开了。
+      local mouse_state = reaper.JS_Mouse_GetState and reaper.JS_Mouse_GetState(1)
+      if mouse_state and (mouse_state & 1 == 0) then
+          local screen_x, screen_y = reaper.GetMousePosition()
+          
+          -- 执行投放
+          if screen_x and screen_y then
+              execution.handle_drop(dragging_slot, screen_x, screen_y)
+          end
+          
+          -- 清理状态
+          R.drag_slot_latch = nil
+          list_view.reset_drag()
+
+          -- 3. 关闭逻辑
+          if R.is_pinned then
+              -- Pin 模式：重置 UI
+              R.clicked_sector = nil
+              R.show_submenu = false
+              R.last_hover_sector_id = nil
+              R.current_active_sector_id = nil
+          else
+              -- 【非 Pin 模式】：进入"僵尸等待模式"
+              -- 不要直接 cleanup()，否则 REAPER 会因为快捷键还按着而立即重启脚本。
+              -- 我们标记状态，让 controller.loop 在下一帧进入隐身等待，直到您松开快捷键。
+              
+              -- 【关键修复】在设置 wait_for_key_release 之前，必须先 PopStyleVar 匹配之前的 PushStyleVar
+              -- 否则会导致 ImGui_End 报错：Missing PopStyleVar()
+              reaper.ImGui_PopStyleVar(ctx)
+              
+              R.wait_for_key_release = true
+              
+              -- 立即返回，停止当前帧绘制
+              return
+          end
       end
-    end
   end
 
   reaper.ImGui_PopStyleVar(ctx)

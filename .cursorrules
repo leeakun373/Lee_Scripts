@@ -105,6 +105,50 @@
 2. 提交时使用 `docs:` 类型
 3. 推送到远程仓库
 
+## ReaPack Changelog 管理规则
+
+### Changelog 格式（参考 FXMiner 项目）
+- **必须使用 `@changelog` 标签**：ReaPack 可以直接读取此标签
+- **位置**：在 `@version` 之后，`@about` 之前
+- **格式**：每行以 `+` 开头，简洁描述改动
+- **语言**：使用英文（与提交信息一致）
+
+### Changelog 示例格式：
+```lua
+-- @version 1.1.11
+-- @changelog
+--   + Fixed window position stability: unified anchor system prevents position drift
+--   + Implemented logic freeze mechanism: 3-frame suppression prevents ghosting
+--   + Fixed rendering artifacts: switched from PathFillConvex to PathStroke
+--   + Improved drag-and-drop: fixed payload format for string-based command IDs
+--   + Enhanced preset creation: blank presets now default to 3 sectors
+--   + Default settings: animation disabled by default, sector expansion enabled
+-- @about Powerful customizable radial menu tool for REAPER
+```
+
+### 当推送更新到 GitHub 时：
+1. **自动更新版本号**：
+   - 更新 `@version` 标签
+   - 更新代码中的 `VERSION` 变量
+   - 更新 `config_defaults.lua` 中的 `CONFIG_SCHEMA_VERSION` 和 `version`
+
+2. **自动更新 Changelog**：
+   - 在 header 中添加或更新 `@changelog` 标签
+   - 根据本次修改内容，以 `+` 开头逐行列出改动
+   - 保持简洁，一行一个改动点
+   - 使用英文描述
+
+3. **更新顺序**：
+   - 先更新版本号
+   - 再更新 changelog
+   - 最后提交并推送
+
+### 特殊项目规则（RadialMenu_Tool）：
+- 主入口文件：`Lee_RadialMenu.lua`
+- 配置文件：`src/config_defaults.lua`
+- 两个文件都需要更新版本号
+- 只在主入口文件的 header 中添加 `@changelog`
+
 ## 特殊指令
 
 ### 当用户说"提交"、"推送"、"版本控制"时:
@@ -152,8 +196,10 @@
 ---
 
 **配置日期**: 2024-11-18
-**最后更新**: 2025-12-19
-**重要变更**: 提交信息必须使用英文（避免中文乱码）
+**最后更新**: 2025-01-20
+**重要变更**: 
+- 提交信息必须使用英文（避免中文乱码）
+- 添加 ReaPack Changelog 管理规则（参考 FXMiner 项目）
 **适用版本**: Cursor AI 所有版本
 
 

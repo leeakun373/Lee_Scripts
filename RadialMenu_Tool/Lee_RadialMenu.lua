@@ -1,13 +1,11 @@
 -- @description Lee Radial Menu Tool
--- @version 1.1.12
+-- @version 1.1.13
 -- @author Lee
 -- @changelog
---   + Implemented restricted drag-and-drop sorting: non-action items can be reordered within submenu
---   + Fixed drag-and-click conflict: use InvisibleButton return value for mouse-up detection
---   + Added drag lock mechanism: freeze sector calculation during drag operations
---   + Implemented smart penetration system: geometry-based mouse passthrough for precise drop zones
---   + Pin mode improvements: prevent auto-close on action execution, disable infinite sector extension
---   + Auto-reset UI state after drag completion in Pin mode
+--   + Implemented manual drag latch system: use JS_API to detect mouse release, bypassing ImGui input limitations
+--   + Added zombie mode: prevent script auto-restart by waiting for key release before cleanup
+--   + Fixed PopStyleVar mismatch: ensure proper cleanup before entering zombie mode
+--   + Enhanced drag-and-drop: maintain drag state even when window is in NoInputs mode
 -- @about
 --   Powerful customizable radial menu tool for REAPER
 --   
@@ -64,9 +62,9 @@ end
 -- ============================================================================
 -- Version Information (Update BUILD_NUMBER after each modification)
 -- ============================================================================
-local VERSION = "1.1.12"
+local VERSION = "1.1.13"
 local BUILD_DATE = "2025-01-21"  -- Update this date after each modification
-local BUILD_NUMBER = "012"  -- Increment this number after each modification (001, 002, 003...)
+local BUILD_NUMBER = "013"  -- Increment this number after each modification (001, 002, 003...)
 
 -- ============================================================================
 -- Development Log

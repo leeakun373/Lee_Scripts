@@ -66,6 +66,12 @@ local R = {
   management_mode = false,
   management_config = nil,
 
+  -- manual drag latch (for penetration mode)
+  drag_slot_latch = nil,
+
+  -- zombie mode (wait for key release to prevent auto-restart)
+  wait_for_key_release = false,
+
   -- 如影随形窗口系统
   last_window_w = nil,
   last_window_h = nil,
@@ -217,6 +223,21 @@ end
 function M.loop()
   if not R.ctx then return end
 
+  -- ============================================================
+  -- 【僵尸模式】防止按键导致的脚本自动重启
+  -- 如果处于"等待按键释放"状态，暂停所有绘图，仅监听按键
+  -- ============================================================
+  if R.wait_for_key_release then
+      if key_held() then
+          -- 键还按着：保持隐身，继续轮询 (不画任何东西)
+          reaper.defer(M.loop)
+      else
+          -- 键松开了：现在可以安全退出了，不会触发重启
+          M.cleanup()
+      end
+      return -- 【重要】直接返回，跳过后续所有绘图和逻辑
+  end
+
   -- dt for dt-driven animations
   local now = reaper.time_precise()
   R.current_frame_dt = 0.0
@@ -263,14 +284,14 @@ function M.loop()
     reaper.ImGui_WindowFlags_NoFocusOnAppearing()
 
   -- ============================================================
-  -- 【终极修复】基于几何的精确穿透 (Geometry-based Penetration)
-  -- 只有当鼠标位于"交互热区"（圆环本体 OR 当前子菜单背景）时，才拦截鼠标。
-  -- 其他所有区域（中心空洞、屏幕角落、子菜单之外的空白）全部穿透。
+  -- 【终极修复】手动接管的动态穿透系统
+  -- 使用 R.drag_slot_latch (手动锁存) 来判断是否处于拖拽中，
+  -- 这样即使开启 NoInputs 导致 ImGui 丢失状态，我们依然知道"正在拖拽"。
   -- ============================================================
-  if list_view and list_view.is_dragging and list_view.is_dragging() then
-      local should_pass_through = true -- 默认穿透
+  if R.drag_slot_latch then
+      local should_pass_through = true 
       
-      -- 获取鼠标和圆心坐标 (ImGui 逻辑坐标)
+      -- 获取鼠标和圆心坐标
       local mx_phys, my_phys = reaper.GetMousePosition()
       if mx_phys and R.target_gui_pos and R.config then
           local mx, my = reaper.ImGui_PointConvertNative(R.ctx, mx_phys, my_phys, false)
@@ -284,30 +305,25 @@ function M.loop()
           local outer = (R.config.menu and R.config.menu.outer_radius) or 115
           
           if dist >= inner and dist <= outer then
-              should_pass_through = false -- 在圆环上，不穿透（允许切扇区）
+              should_pass_through = false -- 在圆环上，不穿透
           end
           
           -- 2. 判定子菜单区域 (Submenu Rect)
-          -- 如果圆环没拦住，再看看是不是在子菜单里
           if should_pass_through and R.show_submenu and R.clicked_sector then
               local cached = submenu_bake_cache.get_cached(R.clicked_sector.id)
               if cached and cached.bg_rect_rel then
-                  -- 计算子菜单的绝对坐标范围
-                  -- bg_rect_rel 是相对于圆心的 {x1, y1, x2, y2}
                   local sm_x1 = cx + cached.bg_rect_rel[1]
                   local sm_y1 = cy + cached.bg_rect_rel[2]
                   local sm_x2 = cx + cached.bg_rect_rel[3]
                   local sm_y2 = cy + cached.bg_rect_rel[4]
-                  
-                  -- 矩形碰撞检测
                   if mx >= sm_x1 and my >= sm_y1 and mx <= sm_x2 and my <= sm_y2 then
-                      should_pass_through = false -- 在子菜单上，不穿透（允许交换）
+                      should_pass_through = false -- 在子菜单上，不穿透
                   end
               end
           end
       end
       
-      -- 应用穿透
+      -- 应用穿透：允许鼠标点击穿过窗口 (Drop to Reaper)
       if should_pass_through then
           window_flags = window_flags | reaper.ImGui_WindowFlags_NoInputs()
       end
