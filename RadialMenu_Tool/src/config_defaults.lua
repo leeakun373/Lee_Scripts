@@ -14,8 +14,8 @@ return {
 
   -- 菜单外观设置
   menu = {
-    outer_radius = 100, -- 轮盘外半径
-    inner_radius = 35, -- 中心圆半径（死区）
+    outer_radius = 115, -- 轮盘外半径
+    inner_radius = 55, -- 中心圆半径（死区）
     sector_border_width = 2, -- 扇区边框宽度
     hover_brightness = 1.3, -- 悬停时亮度增加倍数
     animation_speed = 0.2, -- 动画速度
@@ -36,7 +36,7 @@ return {
     submenu_padding = 10, -- 子菜单窗口内边距（按钮距离窗口边缘的距离，像素）
 
     animation = {
-      enable = true, -- 是否启用动画
+      enable = false, -- 是否启用动画
       duration_open = 0.06, -- 轮盘展开时间（秒）
       duration_submenu = 0.05, -- 子菜单弹出时间（秒）
     },

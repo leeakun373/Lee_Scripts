@@ -355,17 +355,6 @@ function M.draw(R, should_update)
   if dist_sq <= inner_radius_sq then
     -- 检测右键点击 (1 = Right Button)
     if reaper.ImGui_IsMouseClicked(ctx, 1) then
-      -- 【优化】不再更新 target_gui_pos，保持窗口位置不动
-      -- 仅设置 force_reposition 标记，让系统基于原有的 target_gui_pos 重新计算窗口偏移
-      R.force_reposition = true
-      R.last_reposition_time = reaper.time_precise()  -- 记录重定位时间，防止切换时误触发子菜单
-      
-      -- 清理缓存，强制重新烘焙
-      local submenu_bake_cache = require("gui.submenu_bake_cache")
-      local submenu_cache = require("gui.submenu_cache")
-      submenu_bake_cache.clear()
-      submenu_cache.clear()
-      
       -- 如果已经在管理模式下，右键点击中心点应该退出管理模式
       -- 如果不在管理模式下，右键点击中心点进入管理模式
       local controller = require("runtime.controller")
@@ -383,16 +372,6 @@ function M.draw(R, should_update)
   if reaper.ImGui_IsItemDeactivated(ctx) then
     -- 在管理模式下，左键点击中心退出管理模式
     if R.management_mode then
-      -- 【优化】不再更新 target_gui_pos，保持窗口位置不动
-      R.force_reposition = true
-      R.last_reposition_time = reaper.time_precise()  -- 记录重定位时间，防止切换时误触发子菜单
-      
-      -- 清理缓存，强制重新烘焙
-      local submenu_bake_cache = require("gui.submenu_bake_cache")
-      local submenu_cache = require("gui.submenu_cache")
-      submenu_bake_cache.clear()
-      submenu_cache.clear()
-      
       local controller = require("runtime.controller")
       controller.toggle_management_mode()
       

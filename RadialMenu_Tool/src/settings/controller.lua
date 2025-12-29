@@ -588,7 +588,7 @@ function M.draw_preview_panel()
         local anim_enabled = config.menu.animation and config.menu.animation.enable
         if anim_enabled == nil then anim_enabled = true end
         
-        local anim_changed, new_anim = reaper.ImGui_Checkbox(ctx, "启用界面动画 (Master)", anim_enabled)
+        local anim_changed, new_anim = reaper.ImGui_Checkbox(ctx, "启用界面动画", anim_enabled)
         if anim_changed then
             if not config.menu.animation then config.menu.animation = {} end
             config.menu.animation.enable = new_anim

@@ -129,15 +129,26 @@ function M.draw_single_button(ctx, slot, index, w, h, dragging_slot_ref)
         end
     end
     
-    -- 处理拖拽源
-    if is_dragging and is_configured and slot and slot.type == "action" and slot.data and slot.data.command_id then
-        if reaper.ImGui_BeginDragDropSource(ctx, reaper.ImGui_DragDropFlags_None()) then
-            local cmd_id = slot.data.command_id
-            local slot_name = slot.name or ""
-            local payload_data = string.format("%d|%s", cmd_id, slot_name)
-            reaper.ImGui_SetDragDropPayload(ctx, "DND_ACTION", payload_data)
-            reaper.ImGui_Text(ctx, slot_name)
-            reaper.ImGui_EndDragDropSource(ctx)
+    -- 处理拖拽源 (Fix: 修复了 CommandID 格式化崩溃问题和类型限制)
+    if is_dragging and is_configured and slot then
+        -- 获取 Command ID (兼容 data 结构或直接字段)
+        local cmd_id = nil
+        if slot.data and slot.data.command_id then
+            cmd_id = slot.data.command_id
+        elseif slot.command_id then
+            cmd_id = slot.command_id
+        end
+        
+        -- 只要有 cmd_id 就允许拖拽 (不再限制 type == "action")
+        if cmd_id then
+            if reaper.ImGui_BeginDragDropSource(ctx, reaper.ImGui_DragDropFlags_None()) then
+                local slot_name = slot.name or ""
+                -- 【修复】使用 %s 和 tostring 防止 Script ID (字符串) 导致崩溃
+                local payload_data = string.format("%s|%s", tostring(cmd_id), slot_name)
+                reaper.ImGui_SetDragDropPayload(ctx, "DND_ACTION", payload_data)
+                reaper.ImGui_Text(ctx, slot_name)
+                reaper.ImGui_EndDragDropSource(ctx)
+            end
         end
     end
     

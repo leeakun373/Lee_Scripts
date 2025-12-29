@@ -432,9 +432,9 @@ function M.create_blank_config()
   -- 创建一个真正的空白配置，使用默认值的基本结构
   local cfg = M.get_default()
 
-  -- 创建2个空扇区（每个扇区12个空槽位）
+  -- 创建3个空扇区（每个扇区12个空槽位）
   local sectors = {}
-  for i = 1, 2 do
+  for i = 1, 3 do
     local slots = {}
     for _ = 1, 12 do
       table.insert(slots, { type = "empty" })

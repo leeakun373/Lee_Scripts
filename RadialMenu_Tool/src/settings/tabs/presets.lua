@@ -41,10 +41,23 @@ local function trim(s)
 end
 
 local function center_modal_on_appearing(ctx)
-  local vp = reaper.ImGui_GetMainViewport(ctx)
-  if vp and reaper.ImGui_Viewport_GetCenter then
-    local cx, cy = reaper.ImGui_Viewport_GetCenter(vp)
-    reaper.ImGui_SetNextWindowPos(ctx, cx, cy, reaper.ImGui_Cond_Appearing(), 0.5, 0.5)
+  -- 获取 setup 窗口的位置和大小，使弹窗相对于 setup 窗口居中
+  local win_x, win_y = reaper.ImGui_GetWindowPos(ctx)
+  local win_w, win_h = reaper.ImGui_GetWindowSize(ctx)
+  
+  if win_x and win_y and win_w and win_h then
+    -- 计算 setup 窗口的中心点
+    local center_x = win_x + win_w / 2
+    local center_y = win_y + win_h / 2
+    -- 使用中心点作为 pivot，确保弹窗在 setup 窗口中间
+    reaper.ImGui_SetNextWindowPos(ctx, center_x, center_y, reaper.ImGui_Cond_Appearing(), 0.5, 0.5)
+  else
+    -- 如果无法获取窗口信息，回退到视口中心
+    local vp = reaper.ImGui_GetMainViewport(ctx)
+    if vp and reaper.ImGui_Viewport_GetCenter then
+      local cx, cy = reaper.ImGui_Viewport_GetCenter(vp)
+      reaper.ImGui_SetNextWindowPos(ctx, cx, cy, reaper.ImGui_Cond_Appearing(), 0.5, 0.5)
+    end
   end
   reaper.ImGui_SetNextWindowSize(ctx, 0, 0, reaper.ImGui_Cond_Appearing())
 end

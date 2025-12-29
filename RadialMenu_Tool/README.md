@@ -8,8 +8,6 @@
   - 负责：初始化 `config.json`（不存在则从 `config.example.json` 复制）、设置 `package.path`、`require('main_runtime').run()`。
 - **设置编辑器入口**：`Lee_RadialMenu_Setup.lua`
   - 负责：设置 `package.path`、`require('main_settings').show()`。
-- **状态重置**：`Lee_RadialMenu_reset_state.lua`
-  - 负责：清 ExtState `RadialMenu_Tool/Running`，解决“脚本崩溃后无法再打开”的僵尸锁。
 
 ### 当前目录结构（以维护为中心）
 
@@ -17,7 +15,6 @@
 RadialMenu_Tool/
 ├── Lee_RadialMenu.lua                 # 运行时入口（Action List 绑定快捷键）
 ├── Lee_RadialMenu_Setup.lua           # 设置编辑器入口
-├── Lee_RadialMenu_reset_state.lua     # 运行状态重置
 ├── config.example.json                # 配置模板（首次运行会复制为 config.json）
 ├── src/
 │   ├── main_runtime.lua               # 兼容壳：return require('runtime.controller')

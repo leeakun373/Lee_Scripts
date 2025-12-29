@@ -36,7 +36,8 @@ function M.maybe_reload(R)
     submenu_bake_cache.clear()
     submenu_cache.clear()
     
-    -- 清除子菜单状态，避免切换后残留
+    -- [REMOVED] R.is_first_display = true
+    -- 不再触发重定位，使用热更新策略实现配置热重载无缝切换
     if R then
       R.clicked_sector = nil
       R.show_submenu = false

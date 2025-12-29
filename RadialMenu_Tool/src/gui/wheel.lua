@@ -247,47 +247,28 @@ function M.draw_sector(draw_list, ctx, center_x, center_y, sector, index, total_
     M.draw_sector_text(draw_list, ctx, center_x, center_y, text_radius, start_angle, end_angle, sector, should_highlight)
 end
 
--- 绘制扇形（使用 Path API 优化，单次绘制）
+-- [Fix] Use PathStroke to render concave sectors correctly
 function M.draw_sector_arc_gradient(draw_list, center_x, center_y, inner_radius, outer_radius, start_angle, end_angle, col_in, col_out, expansion_progress)
-    expansion_progress = expansion_progress or 0.0
-    -- [PERF] 动态 segments：根据半径计算分段数
+    -- Calculate geometry for stroking
+    local thickness = outer_radius - inner_radius
     local avg_radius = (inner_radius + outer_radius) / 2
-    local outer_segments = 32  -- 外弧分段数
-    local inner_segments = 24  -- 内弧分段数
     
-    -- 根据半径调整分段数
-    if avg_radius < 50 then
-        outer_segments = 16
-        inner_segments = 12
-    elseif avg_radius < 100 then
-        outer_segments = 24
-        inner_segments = 18
-    end
-    
-    -- 计算角度跨度
-    local angle_span = end_angle - start_angle
-    if angle_span < 0 then angle_span = angle_span + 2 * math.pi end
-    
-    -- 根据角度跨度调整分段数
+    -- Dynamic segments calculation
+    local segments = 32
+    local angle_span = math.abs(end_angle - start_angle)
     local angle_ratio = angle_span / (2 * math.pi)
-    outer_segments = math.max(12, math.floor(outer_segments * angle_ratio))
-    inner_segments = math.max(12, math.floor(inner_segments * angle_ratio))
     
-    -- 使用外圆颜色（更亮的颜色，视觉上更突出）
-    -- 由于 col_in 和 col_out 已经在 draw_sector 中进行了插值，这里直接使用 col_out
-    local fill_color = col_out
+    if avg_radius < 50 then segments = 16
+    elseif avg_radius < 100 then segments = 24 end
+    segments = math.max(12, math.floor(segments * angle_ratio))
     
-    -- 使用 Path API 进行单次绘制
+    -- Use col_out as the fill color (gradients not supported in single stroke)
+    local color = col_out
+    
+    -- Draw using thick stroke
     reaper.ImGui_DrawList_PathClear(draw_list)
-    
-    -- 绘制外弧（从 StartAngle 到 EndAngle）
-    reaper.ImGui_DrawList_PathArcTo(draw_list, center_x, center_y, outer_radius, start_angle, end_angle, outer_segments)
-    
-    -- 绘制内弧（从 EndAngle 到 StartAngle，角度反向以闭合路径）
-    reaper.ImGui_DrawList_PathArcTo(draw_list, center_x, center_y, inner_radius, end_angle, start_angle, inner_segments)
-    
-    -- 填充封闭路径
-    reaper.ImGui_DrawList_PathFillConvex(draw_list, fill_color)
+    reaper.ImGui_DrawList_PathArcTo(draw_list, center_x, center_y, avg_radius, start_angle, end_angle, segments)
+    reaper.ImGui_DrawList_PathStroke(draw_list, color, 0, thickness)
 end
 
 -- 绘制边缘高光
@@ -345,41 +326,24 @@ function M.draw_sector_gap_fill(draw_list, center_x, center_y, inner_radius, out
     end
 end
 
--- 绘制实心扇形（单色填充，用于间隙填充）
+-- [Fix] Use PathStroke for gap filling as well
 function M.draw_sector_arc_solid(draw_list, center_x, center_y, inner_radius, outer_radius, start_angle, end_angle, color)
+    local thickness = outer_radius - inner_radius
     local avg_radius = (inner_radius + outer_radius) / 2
-    local outer_segments = 32
-    local inner_segments = 24
     
-    -- 根据半径调整分段数
-    if avg_radius < 50 then
-        outer_segments = 16
-        inner_segments = 12
-    elseif avg_radius < 100 then
-        outer_segments = 24
-        inner_segments = 18
-    end
-    
-    -- 计算角度跨度
-    local angle_span = end_angle - start_angle
-    if angle_span < 0 then angle_span = angle_span + 2 * math.pi end
-    
-    -- 根据角度跨度调整分段数
+    -- Dynamic segments
+    local segments = 32
+    local angle_span = math.abs(end_angle - start_angle)
     local angle_ratio = angle_span / (2 * math.pi)
-    outer_segments = math.max(12, math.floor(outer_segments * angle_ratio))
-    inner_segments = math.max(12, math.floor(inner_segments * angle_ratio))
     
-    -- 使用 Path API 进行单次绘制
+    if avg_radius < 50 then segments = 16
+    elseif avg_radius < 100 then segments = 24 end
+    segments = math.max(12, math.floor(segments * angle_ratio))
+    
+    -- Draw
     reaper.ImGui_DrawList_PathClear(draw_list)
-    
-    -- 绘制外弧（从 StartAngle 到 EndAngle）
-    reaper.ImGui_DrawList_PathArcTo(draw_list, center_x, center_y, outer_radius, start_angle, end_angle, outer_segments)
-    
-    -- 绘制内弧（从 EndAngle 到 StartAngle，角度反向以闭合路径）
-    reaper.ImGui_DrawList_PathArcTo(draw_list, center_x, center_y, inner_radius, end_angle, start_angle, inner_segments)
-    
-    -- 填充封闭路径
-    reaper.ImGui_DrawList_PathFillConvex(draw_list, color)
+    reaper.ImGui_DrawList_PathArcTo(draw_list, center_x, center_y, avg_radius, start_angle, end_angle, segments)
+    reaper.ImGui_DrawList_PathStroke(draw_list, color, 0, thickness)
 end
 
 -- 绘制扇区边框线（纯黑切割线）
