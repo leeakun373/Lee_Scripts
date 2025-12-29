@@ -1,6 +1,13 @@
 -- @description Lee Radial Menu Tool
--- @version 1.1.11
+-- @version 1.1.12
 -- @author Lee
+-- @changelog
+--   + Implemented restricted drag-and-drop sorting: non-action items can be reordered within submenu
+--   + Fixed drag-and-click conflict: use InvisibleButton return value for mouse-up detection
+--   + Added drag lock mechanism: freeze sector calculation during drag operations
+--   + Implemented smart penetration system: geometry-based mouse passthrough for precise drop zones
+--   + Pin mode improvements: prevent auto-close on action execution, disable infinite sector extension
+--   + Auto-reset UI state after drag completion in Pin mode
 -- @about
 --   Powerful customizable radial menu tool for REAPER
 --   
@@ -10,15 +17,6 @@
 --   - Preview area caching mechanism with signature-based invalidation
 --   - Text line caching for wheel rendering
 --   - Pre-bake system for submenu layout (zero-cost rendering after first frame)
---   
---   Changelog (v1.1.11):
---   - Fixed window position stability: unified anchor system prevents position drift on mode switches
---   - Implemented logic freeze mechanism: 3-frame suppression prevents ghosting during transitions
---   - Fixed rendering artifacts: switched from PathFillConvex to PathStroke for concave sectors
---   - Improved drag-and-drop: fixed payload format for string-based command IDs, aligned InvisibleButton with DrawList
---   - Enhanced preset creation: blank presets now default to 3 sectors with outer_radius=115, inner_radius=55
---   - Default settings: animation disabled by default, sector expansion enabled (4px, speed 8)
---   - UI improvements: removed "(Master)" label from animation toggle, centered preset modal on setup window
 -- @provides
 --   [main] .
 --   [main] Lee_RadialMenu_Setup.lua
@@ -66,9 +64,9 @@ end
 -- ============================================================================
 -- Version Information (Update BUILD_NUMBER after each modification)
 -- ============================================================================
-local VERSION = "1.1.11"
-local BUILD_DATE = "2025-01-20"  -- Update this date after each modification
-local BUILD_NUMBER = "011"  -- Increment this number after each modification (001, 002, 003...)
+local VERSION = "1.1.12"
+local BUILD_DATE = "2025-01-21"  -- Update this date after each modification
+local BUILD_NUMBER = "012"  -- Increment this number after each modification (001, 002, 003...)
 
 -- ============================================================================
 -- Development Log

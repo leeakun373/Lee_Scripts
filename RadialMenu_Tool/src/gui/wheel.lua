@@ -225,8 +225,12 @@ function M.draw_sector(draw_list, ctx, center_x, center_y, sector, index, total_
     
     -- 【新增】绘制扇区间隙填充（使用边框颜色）
     -- 在绘制扇区之前先填充间隙，这样扇区会覆盖在间隙之上
+    -- Calculate a small overlap (approx 1.5 pixels) to prevent anti-aliasing seams
+    local overlap_radians = 1.5 / outer_radius
+    -- Draw gap fill with overlap: extend slightly INTO the sector area
+    -- Since the sector body is drawn ON TOP later, this creates a perfect seal.
     M.draw_sector_gap_fill(draw_list, center_x, center_y, inner_radius, outer_radius, 
-                           start_angle, draw_start, end_angle, draw_end)
+                           start_angle, draw_start + overlap_radians, end_angle, draw_end - overlap_radians)
     
     -- 绘制扇形（使用插值后的颜色）
     M.draw_sector_arc_gradient(draw_list, center_x, center_y, inner_radius, outer_radius, 

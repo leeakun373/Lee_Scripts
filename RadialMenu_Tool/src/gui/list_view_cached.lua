@@ -65,29 +65,50 @@ function M.draw_submenu_cached(ctx, sector_data, center_x, center_y, anim_scale,
         local grid_index = (item.grid_pos[1] or 0) * cached_data.cols + (item.grid_pos[2] or 0) + 1
         local button_id = "##BakedSlot_" .. tostring(sector_data.id) .. "_" .. tostring(grid_index) .. "_" .. tostring(i)
         
-        -- [B] 交互层：放置隐形按钮
+        -- [B] Interaction Layer: Invisible Button
         -- 【关键修复】使用 SetCursorScreenPos 替代 SetCursorPos
         -- 这样可以忽略窗口 Padding，确保按钮与 DrawList 绘制的位置严丝合缝
         reaper.ImGui_SetCursorScreenPos(ctx, rect[1], rect[2])
+        reaper.ImGui_PushID(ctx, button_id)
         
-        reaper.ImGui_PushID(ctx, button_id) 
-        reaper.ImGui_InvisibleButton(ctx, "btn", rect[3] - rect[1], rect[4] - rect[2])
+        -- [FIX 1] Capture the button click event (fires on Mouse Up)
+        local is_btn_clicked = reaper.ImGui_InvisibleButton(ctx, "btn", rect[3] - rect[1], rect[4] - rect[2])
         
-        -- [C] 状态检测
+        -- [C] State Detection
         local is_active = reaper.ImGui_IsItemActive(ctx)
         local is_hover = reaper.ImGui_IsItemHovered(ctx)
-        local is_clicked = reaper.ImGui_IsItemClicked(ctx, 0)
+        -- Note: We no longer use IsItemClicked(0) for triggering actions because it fires on Mouse Down
         
         if is_hover then is_submenu_hovered = true end
         
         local is_configured = item.slot and item.slot.type ~= "empty"
         
-        -- [D] 拖拽触发 (已包含 CommandID 格式化修复)
+        -- [D] Drag Logic (Restricted: Actions cannot be dragged)
         local is_dragging = false
         if is_configured and is_active then
+            -- [FIX 2] Only allow dragging if type is NOT "action"
+            if item.slot.type ~= "action" then
+                if reaper.ImGui_IsMouseDragging(ctx, 0) then
+                    if reaper.ImGui_BeginDragDropSource(ctx, reaper.ImGui_DragDropFlags_None()) then
+                        is_dragging = true
+                        
+                        -- Payload: Index
+                        reaper.ImGui_SetDragDropPayload(ctx, "DND_SUBMENU_SWAP", tostring(i))
+                        
+                        -- Preview
+                        reaper.ImGui_Text(ctx, "Move: " .. (item.slot.name or "Item"))
+                        reaper.ImGui_EndDragDropSource(ctx)
+                        
+                        if dragging_slot_ref then dragging_slot_ref[1] = item.slot end
+                    end
+                end
+            end
+        end
+        
+        -- [D2] Drag Source: For external drag (Action/FX/Chain to Reaper toolbars)
+        -- Note: Actions can be dragged to external, but not for internal sorting
+        if is_configured and is_active and not is_dragging then
             if reaper.ImGui_IsMouseDragging(ctx, 0) then
-                is_dragging = true
-                
                 -- 获取 Command ID
                 local cmd_id = nil
                 if item.slot.data and item.slot.data.command_id then
@@ -98,22 +119,44 @@ function M.draw_submenu_cached(ctx, sector_data, center_x, center_y, anim_scale,
 
                 if cmd_id then
                     if reaper.ImGui_BeginDragDropSource(ctx, reaper.ImGui_DragDropFlags_None()) then
+                        is_dragging = true
                         local slot_name = item.slot.name or ""
                         local payload_data = string.format("%s|%s", tostring(cmd_id), slot_name)
                         
                         reaper.ImGui_SetDragDropPayload(ctx, "DND_ACTION", payload_data)
                         reaper.ImGui_Text(ctx, slot_name) -- 预览
                         reaper.ImGui_EndDragDropSource(ctx)
+                        
+                        if dragging_slot_ref then dragging_slot_ref[1] = item.slot end
                     end
                 end
-                
-                if dragging_slot_ref then dragging_slot_ref[1] = item.slot end
             end
+        end
+        
+        -- [E] Drop Target (Allow swapping for ALL types)
+        if reaper.ImGui_BeginDragDropTarget(ctx) then
+            local ret, payload = reaper.ImGui_AcceptDragDropPayload(ctx, "DND_SUBMENU_SWAP")
+            if ret and payload then
+                local source_index = tonumber(payload)
+                local target_index = i
+                if source_index and source_index ~= target_index then
+                    -- Perform Swap
+                    local slots = sector_data.slots
+                    if slots[source_index] and slots[target_index] then
+                        local temp = slots[source_index]
+                        slots[source_index] = slots[target_index]
+                        slots[target_index] = temp
+                        -- Invalidate Cache to show changes immediately
+                        submenu_bake_cache.clear()
+                    end
+                end
+            end
+            reaper.ImGui_EndDragDropTarget(ctx)
         end
         
         reaper.ImGui_PopID(ctx) 
         
-        -- [E] 绘制状态反馈 (DrawList)
+        -- [F] Draw Visuals (Background/Border/Text) based on state
         local col_normal, col_hover, col_active, col_border, text_color
         if is_configured then
             col_normal = button_colors.configured.normal
@@ -143,9 +186,11 @@ function M.draw_submenu_cached(ctx, sector_data, center_x, center_y, anim_scale,
             reaper.ImGui_DrawList_PopClipRect(draw_list)
         end
         
-        -- [F] 点击处理
+        -- [G] Click Handling (Triggered on Release)
         if is_configured and item.slot then
-            if is_clicked and not is_dragging then
+            -- [FIX 3] Use the InvisibleButton return value (Mouse Up)
+            -- This ensures we don't trigger if the user was dragging
+            if is_btn_clicked then
                 interaction.handle_item_click(item.slot)
             end
             

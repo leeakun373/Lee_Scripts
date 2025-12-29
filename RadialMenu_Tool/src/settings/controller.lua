@@ -37,6 +37,7 @@ local config = nil
 local original_config = nil  -- 原始配置（用于丢弃更改）
 local is_open = false
 local removed_sector_stash = {}  -- 缓存被删除的扇区数据（用于恢复）
+local prevent_menu_restart = false  -- 标志：禁止在关闭时重启轮盘（用于 Toggle 关闭场景）
 
 -- 中央状态对象（传递给各个模块）
 local state = settings_state.new()
@@ -102,6 +103,7 @@ function M.init()
     -- 同步语言状态
     state.language = i18n.get_language()
     is_open = true
+    prevent_menu_restart = false  -- 重置标志，确保正常打开时不受影响
     state.is_modified = false
     state.selected_sector_index = nil
     state.selected_slot_index = nil
@@ -134,6 +136,28 @@ end
 
 -- 设置编辑器主循环
 function M.loop()
+    -- 【新增】监听关闭信号
+    if reaper.GetExtState("RadialMenu_Setup", "Command") == "CLOSE" then
+        -- 清除信号
+        reaper.SetExtState("RadialMenu_Setup", "Command", "", false)
+        -- 清除运行状态
+        reaper.SetExtState("RadialMenu_Setup", "Running", "0", false)
+        
+        -- 设置全局标志位，告诉 Setup 脚本的退出逻辑（如果有的话）不要尝试重启轮盘
+        -- (虽然因为轮盘现在保持开启，重启逻辑会被单例检查拦截，但这样更保险)
+        if _G then 
+            _G.RadialMenu_PreventRestart = true 
+        end
+        
+        -- 【关键】标记为"禁止重启"，防止自动重启轮盘导致"无法检测到触发按键"错误
+        prevent_menu_restart = true
+        
+        -- 关闭窗口
+        is_open = false
+        M.cleanup()
+        return
+    end
+    
     if not ctx or not is_open then
         M.cleanup()
         return
@@ -1914,6 +1938,8 @@ function M.cleanup()
     
     -- 清除设置窗口打开标记
     reaper.SetExtState("RadialMenu", "SettingsOpen", "0", false)
+    -- 清除 Setup 运行状态
+    reaper.SetExtState("RadialMenu_Setup", "Running", "0", false)
     
     if ctx then
         if reaper.ImGui_DestroyContext then

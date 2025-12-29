@@ -255,11 +255,63 @@ function M.loop()
     execution.set_last_valid_context(R.last_valid_context)
   end
 
+  -- 1. 基础窗口标志
   local window_flags = reaper.ImGui_WindowFlags_NoDecoration() |
     reaper.ImGui_WindowFlags_NoMove() |
     reaper.ImGui_WindowFlags_NoResize() |
     reaper.ImGui_WindowFlags_NoSavedSettings() |
     reaper.ImGui_WindowFlags_NoFocusOnAppearing()
+
+  -- ============================================================
+  -- 【终极修复】基于几何的精确穿透 (Geometry-based Penetration)
+  -- 只有当鼠标位于"交互热区"（圆环本体 OR 当前子菜单背景）时，才拦截鼠标。
+  -- 其他所有区域（中心空洞、屏幕角落、子菜单之外的空白）全部穿透。
+  -- ============================================================
+  if list_view and list_view.is_dragging and list_view.is_dragging() then
+      local should_pass_through = true -- 默认穿透
+      
+      -- 获取鼠标和圆心坐标 (ImGui 逻辑坐标)
+      local mx_phys, my_phys = reaper.GetMousePosition()
+      if mx_phys and R.target_gui_pos and R.config then
+          local mx, my = reaper.ImGui_PointConvertNative(R.ctx, mx_phys, my_phys, false)
+          local cx, cy = R.target_gui_pos.x, R.target_gui_pos.y
+          
+          -- 1. 判定圆环区域 (Ring Area)
+          local dx = mx - cx
+          local dy = my - cy
+          local dist = math.sqrt(dx * dx + dy * dy)
+          local inner = (R.config.menu and R.config.menu.inner_radius) or 55
+          local outer = (R.config.menu and R.config.menu.outer_radius) or 115
+          
+          if dist >= inner and dist <= outer then
+              should_pass_through = false -- 在圆环上，不穿透（允许切扇区）
+          end
+          
+          -- 2. 判定子菜单区域 (Submenu Rect)
+          -- 如果圆环没拦住，再看看是不是在子菜单里
+          if should_pass_through and R.show_submenu and R.clicked_sector then
+              local cached = submenu_bake_cache.get_cached(R.clicked_sector.id)
+              if cached and cached.bg_rect_rel then
+                  -- 计算子菜单的绝对坐标范围
+                  -- bg_rect_rel 是相对于圆心的 {x1, y1, x2, y2}
+                  local sm_x1 = cx + cached.bg_rect_rel[1]
+                  local sm_y1 = cy + cached.bg_rect_rel[2]
+                  local sm_x2 = cx + cached.bg_rect_rel[3]
+                  local sm_y2 = cy + cached.bg_rect_rel[4]
+                  
+                  -- 矩形碰撞检测
+                  if mx >= sm_x1 and my >= sm_y1 and mx <= sm_x2 and my <= sm_y2 then
+                      should_pass_through = false -- 在子菜单上，不穿透（允许交换）
+                  end
+              end
+          end
+      end
+      
+      -- 应用穿透
+      if should_pass_through then
+          window_flags = window_flags | reaper.ImGui_WindowFlags_NoInputs()
+      end
+  end
 
   -- ============================================================
   -- 【终极定位系统】统一锚点计算 (Unified Anchor System)
@@ -405,10 +457,17 @@ function M.loop()
     local slot_to_exec = queued_slot
     queued_slot = nil
 
-    -- Close UI now, but keep key intercept + Running lock until key release.
-    -- This prevents the held hotkey from key-repeating and re-triggering the script.
-    M.cleanup({ keep_key_intercept = true, keep_running = true })
-    defer_release_key_and_running()
+    -- 【修复】Pin 模式下，执行动作不关闭轮盘
+    if not R.is_pinned then
+        -- Close UI now, but keep key intercept + Running lock until key release.
+        -- This prevents the held hotkey from key-repeating and re-triggering the script.
+        M.cleanup({ keep_key_intercept = true, keep_running = true })
+        defer_release_key_and_running()
+    else
+        -- Pin 模式：仅重置必要的交互状态，保持窗口开启
+        R.clicked_sector = nil
+        R.show_submenu = false
+    end
 
     if orig_trigger_slot then
       reaper.defer(function()
@@ -416,7 +475,9 @@ function M.loop()
       end)
     end
 
-    return
+    if not R.is_pinned then
+      return
+    end
   end
 
   if open then
@@ -528,6 +589,19 @@ function M.toggle_management_mode()
 end
 
 function M.open_setup_script()
+  -- 检查 Setup 脚本是否正在运行
+  local is_running = reaper.GetExtState("RadialMenu_Setup", "Running")
+  
+  if is_running == "1" then
+    -- Setup 脚本正在运行，发送关闭信号
+    reaper.SetExtState("RadialMenu_Setup", "Command", "CLOSE", false)
+    -- 【核心修复】不要关闭当前的轮盘！让它保持开启，这样用户 toggling setup 后可以直接继续使用轮盘。
+    -- 这也避免了 Setup 关闭后尝试重启轮盘导致的"无法检测按键"错误（因为轮盘本来就开着，重启会被单例检查拦截）。
+    -- [已删除] M.cleanup()
+    return
+  end
+  
+  -- Setup 脚本未运行，正常启动
   -- 计算 Setup 脚本的绝对路径
   -- 从当前文件 (controller.lua) 的位置推导根目录
   local source_path = debug.getinfo(1, "S").source

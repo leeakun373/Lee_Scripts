@@ -7,10 +7,10 @@
 
 return {
   -- Schema/version marker for maintenance & migrations
-  CONFIG_SCHEMA_VERSION = "1.1.11",
+  CONFIG_SCHEMA_VERSION = "1.1.12",
 
   -- Config version stored in config.json (kept for backward compatibility)
-  version = "1.1.11",
+  version = "1.1.12",
 
   -- 菜单外观设置
   menu = {

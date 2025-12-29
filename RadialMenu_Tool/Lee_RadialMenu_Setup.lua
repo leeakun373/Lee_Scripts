@@ -103,8 +103,13 @@ end
 -- ============================================================================
 
 function main()
+    -- 标记 Setup 脚本为运行状态
+    reaper.SetExtState("RadialMenu_Setup", "Running", "1", false)
+    
     -- 检查依赖
     if not check_dependencies() then
+        -- 如果依赖检查失败，清除运行状态
+        reaper.SetExtState("RadialMenu_Setup", "Running", "0", false)
         return
     end
     
@@ -114,6 +119,8 @@ function main()
     -- 加载设置编辑器模块
     local success, main_settings = pcall(require, "main_settings")
     if not success then
+        -- 如果加载失败，清除运行状态
+        reaper.SetExtState("RadialMenu_Setup", "Running", "0", false)
         reaper.ShowMessageBox(
             "错误: 无法加载设置编辑器\n" .. tostring(main_settings),
             "加载错误", 0
@@ -133,9 +140,16 @@ end
 local success, error_msg = pcall(main)
 
 if not success then
+    -- 如果启动失败，清除运行状态
+    reaper.SetExtState("RadialMenu_Setup", "Running", "0", false)
     reaper.ShowMessageBox(
         "RadialMenu Tool 设置编辑器启动失败:\n\n" .. tostring(error_msg),
         "错误", 0
     )
 end
+
+-- 注册退出回调，确保在脚本退出时清除运行状态
+reaper.atexit(function()
+    reaper.SetExtState("RadialMenu_Setup", "Running", "0", false)
+end)
 

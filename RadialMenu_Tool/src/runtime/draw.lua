@@ -205,44 +205,81 @@ function M.draw(R, should_update)
   local active_sector_id = nil
   local inner_radius_sq = inner_radius * inner_radius
   
-  -- 【切换保护】如果在重定位后的0.1秒内，强制禁用扇区判定，防止切换模式时子菜单瞬间闪现
-  local time_since_reposition = reaper.time_precise() - (R.last_reposition_time or 0)
-  local is_repositioning = (time_since_reposition < 0.1)
-  
-  -- 【第三阶段修复】判定保护：在切换预设或管理模式瞬间，如果鼠标位置正好处于新旧扇区的交界处，
-  -- 使用上一帧的 active_sector_id 作为后备，防止 active_sector_id 在切换帧变为 nil
-  local last_active_sector_id = R.last_hover_sector_id
-  
-  -- 只有出了内圈才开始算（实现 Sexan 的"无限外延"且"中间有死区"）
-  -- 不检查外圈上限，这样鼠标在轮盘外也能根据方向判断扇区
-  -- 【切换保护】如果在重定位期间，跳过扇区判定
-  if not is_repositioning and dist_sq > inner_radius_sq and draw_config.sectors then
-    local num_sectors = #draw_config.sectors
-    
-    -- 【第三阶段修复】容错检查：如果扇区数量无效，直接跳过
-    if num_sectors < 1 then
-      -- 无效配置，不激活任何扇区
-    elseif num_sectors == 1 then
-      -- 【第三阶段修复】单扇区特殊处理：直接激活唯一扇区，避免循环判定问题
-      active_sector = draw_config.sectors[1]
-      active_sector_id = active_sector.id
+  -- 【核心修复】拖拽锁：如果正在拖拽子菜单项，强制冻结扇区计算
+  -- 这防止了拖拽经过其他扇区时触发子菜单切换，导致拖拽中断
+  if list_view.is_dragging() then
+    -- 保持当前状态：不计算新扇区，也不高亮任何新扇区
+    -- 如果您希望保持当前打开的扇区高亮，可以手动赋值为 R.clicked_sector
+    if R.show_submenu and R.clicked_sector then
+      active_sector = R.clicked_sector
+      active_sector_id = R.clicked_sector.id
     else
-      -- 多扇区正常处理
-      local step = (2 * math.pi) / num_sectors
-      local start_offset = -math.pi / 2  -- 从上方（-90度）开始分布
+      active_sector = nil
+      active_sector_id = nil
+    end
+  else
+    -- 正常模式：计算鼠标下的扇区
+    -- 【切换保护】如果在重定位后的0.1秒内，强制禁用扇区判定，防止切换模式时子菜单瞬间闪现
+    local time_since_reposition = reaper.time_precise() - (R.last_reposition_time or 0)
+    local is_repositioning = (time_since_reposition < 0.1)
+    
+    -- 【第三阶段修复】判定保护：在切换预设或管理模式瞬间，如果鼠标位置正好处于新旧扇区的交界处，
+    -- 使用上一帧的 active_sector_id 作为后备，防止 active_sector_id 在切换帧变为 nil
+    local last_active_sector_id = R.last_hover_sector_id
+    
+    -- 只有出了内圈才开始算（实现 Sexan 的"无限外延"且"中间有死区"）
+    -- 【修复】Pin 模式下禁用无限扇区：必须限制在外圈以内
+    local is_valid_dist = (dist_sq > inner_radius_sq)
+    
+    if R.is_pinned then
+        local outer_radius_sq = outer_radius * outer_radius
+        is_valid_dist = is_valid_dist and (dist_sq <= outer_radius_sq)
+    end
+
+    -- 【切换保护】如果在重定位期间，跳过扇区判定
+    if not is_repositioning and is_valid_dist and draw_config.sectors then
+      local num_sectors = #draw_config.sectors
       
-      -- 遍历所有扇区，看鼠标角度落在哪一个里面
-      for i = 1, num_sectors do
-        local ang_min = start_offset + (i - 1) * step
-        local ang_max = start_offset + i * step
+      -- 【第三阶段修复】容错检查：如果扇区数量无效，直接跳过
+      if num_sectors < 1 then
+        -- 无效配置，不激活任何扇区
+      elseif num_sectors == 1 then
+        -- 【第三阶段修复】单扇区特殊处理：直接激活唯一扇区，避免循环判定问题
+        active_sector = draw_config.sectors[1]
+        active_sector_id = active_sector.id
+      else
+        -- 多扇区正常处理
+        local step = (2 * math.pi) / num_sectors
+        local start_offset = -math.pi / 2  -- 从上方（-90度）开始分布
         
-        -- 【关键点】用数学判断，而不是 UI 碰撞
-        -- 只判断角度，不判断距离上限，实现"无限外延"效果
-        -- 【修复】确保只匹配一个扇区，找到后立即退出
-        if math_utils.angle_in_range(mouse_angle, ang_min, ang_max) then
-          active_sector = draw_config.sectors[i]
-          active_sector_id = active_sector.id
-          break  -- 【关键】找到了就立即退出，确保只有一个扇区被激活
+        -- 遍历所有扇区，看鼠标角度落在哪一个里面
+        for i = 1, num_sectors do
+          local ang_min = start_offset + (i - 1) * step
+          local ang_max = start_offset + i * step
+          
+          -- 【关键点】用数学判断，而不是 UI 碰撞
+          -- 只判断角度，不判断距离上限，实现"无限外延"效果
+          -- 【修复】确保只匹配一个扇区，找到后立即退出
+          if math_utils.angle_in_range(mouse_angle, ang_min, ang_max) then
+            active_sector = draw_config.sectors[i]
+            active_sector_id = active_sector.id
+            break  -- 【关键】找到了就立即退出，确保只有一个扇区被激活
+          end
+        end
+      end
+    end
+    
+    -- 【第三阶段修复】判定保护：如果计算出的 active_sector_id 为 nil，但上一帧有有效的 active_sector_id，
+    -- 且鼠标仍在有效范围内，则使用上一帧的值作为后备，防止切换帧时的焦点漂移
+    if active_sector_id == nil and last_active_sector_id ~= nil and dist_sq > inner_radius_sq then
+      -- 验证上一帧的扇区ID是否仍然存在于当前配置中
+      if draw_config.sectors then
+        for _, sector in ipairs(draw_config.sectors) do
+          if tostring(sector.id) == tostring(last_active_sector_id) then
+            active_sector = sector
+            active_sector_id = sector.id
+            break
+          end
         end
       end
     end
@@ -444,6 +481,15 @@ function M.draw(R, should_update)
         execution.handle_drop(dragging_slot, screen_x, screen_y)
       end
       list_view.reset_drag()
+
+      -- 【优化】Pin 模式下，拖拽结束视为操作完成，自动重置回圆环状态
+      -- 这样用户可以立即进行下一次操作，而不需要手动关闭子栏
+      if R.is_pinned then
+          R.clicked_sector = nil
+          R.show_submenu = false
+          R.last_hover_sector_id = nil
+          R.current_active_sector_id = nil
+      end
     end
   end
 
