@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="a8f416f331058a1b6144fe94185b7327e5109e72" name="Lee_Scripts">
+<index version="1" commit="f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0" name="Lee_Scripts">
   <category name="FX/FXMiner">
     <reapack name="Lee_FXMiner - Browser.lua" type="script" desc="Lee_FXMiner - Browser">
       <metadata>
@@ -349,14 +349,6 @@
 {\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Preview area caching mechanism with signature-based invalidation\par}
 {\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Text line caching for wheel rendering\par}
 {\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Pre-bake system for submenu layout (zero-cost rendering after first frame)\sa180\par}
-{\pard \ql \f0 \sa180 \li0 \fi0 Changelog (v1.1.11):\par}
-{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Fixed window position stability: unified anchor system prevents position drift on mode switches\par}
-{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Implemented logic freeze mechanism: 3-frame suppression prevents ghosting during transitions\par}
-{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Fixed rendering artifacts: switched from PathFillConvex to PathStroke for concave sectors\par}
-{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Improved drag-and-drop: fixed payload format for string-based command IDs, aligned InvisibleButton with DrawList\par}
-{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Enhanced preset creation: blank presets now default to 3 sectors with outer_radius=115, inner_radius=55\par}
-{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Default settings: animation disabled by default, sector expansion enabled (4px, speed 8)\par}
-{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab UI improvements: removed "(Master)" label from animation toggle, centered preset modal on setup window\sa180\par}
 }
 ]]></description>
       </metadata>
@@ -778,6 +770,51 @@
         <source file="utils/json.lua">https://github.com/leeakun373/Lee_Scripts/raw/a8f416f331058a1b6144fe94185b7327e5109e72/RadialMenu_Tool/utils/json.lua</source>
         <source file="utils/math_utils.lua">https://github.com/leeakun373/Lee_Scripts/raw/a8f416f331058a1b6144fe94185b7327e5109e72/RadialMenu_Tool/utils/math_utils.lua</source>
         <source file="utils/utils_fx.lua">https://github.com/leeakun373/Lee_Scripts/raw/a8f416f331058a1b6144fe94185b7327e5109e72/RadialMenu_Tool/utils/utils_fx.lua</source>
+      </version>
+      <version name="1.1.12" author="Lee" time="2025-12-29T18:21:12Z">
+        <changelog><![CDATA[+ Implemented restricted drag-and-drop sorting: non-action items can be reordered within submenu
++ Fixed drag-and-click conflict: use InvisibleButton return value for mouse-up detection
++ Added drag lock mechanism: freeze sector calculation during drag operations
++ Implemented smart penetration system: geometry-based mouse passthrough for precise drop zones
++ Pin mode improvements: prevent auto-close on action execution, disable infinite sector extension
++ Auto-reset UI state after drag completion in Pin mode]]></changelog>
+        <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/Lee_RadialMenu.lua</source>
+        <source main="main" file="Lee_RadialMenu_Setup.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/Lee_RadialMenu_Setup.lua</source>
+        <source file="config.example.json">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/config.example.json</source>
+        <source file="src/config_defaults.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/config_defaults.lua</source>
+        <source file="src/config_manager.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/config_manager.lua</source>
+        <source file="src/gui/list_view.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/gui/list_view.lua</source>
+        <source file="src/gui/list_view_button.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/gui/list_view_button.lua</source>
+        <source file="src/gui/list_view_cached.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/gui/list_view_cached.lua</source>
+        <source file="src/gui/list_view_interaction.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/gui/list_view_interaction.lua</source>
+        <source file="src/gui/list_view_layout.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/gui/list_view_layout.lua</source>
+        <source file="src/gui/styles.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/gui/styles.lua</source>
+        <source file="src/gui/submenu_bake_cache.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/gui/submenu_bake_cache.lua</source>
+        <source file="src/gui/submenu_cache.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/gui/submenu_cache.lua</source>
+        <source file="src/gui/wheel.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/gui/wheel.lua</source>
+        <source file="src/logic/actions.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/logic/actions.lua</source>
+        <source file="src/logic/execution.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/logic/execution.lua</source>
+        <source file="src/main_runtime.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/main_runtime.lua</source>
+        <source file="src/main_settings.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/main_settings.lua</source>
+        <source file="src/runtime/anim.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/runtime/anim.lua</source>
+        <source file="src/runtime/config_reload.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/runtime/config_reload.lua</source>
+        <source file="src/runtime/controller.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/runtime/controller.lua</source>
+        <source file="src/runtime/draw.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/runtime/draw.lua</source>
+        <source file="src/runtime/input.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/runtime/input.lua</source>
+        <source file="src/runtime/perf.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/runtime/perf.lua</source>
+        <source file="src/settings/controller.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/settings/controller.lua</source>
+        <source file="src/settings/ops.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/settings/ops.lua</source>
+        <source file="src/settings/state.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/settings/state.lua</source>
+        <source file="src/settings/tabs/browser.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/settings/tabs/browser.lua</source>
+        <source file="src/settings/tabs/grid.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/settings/tabs/grid.lua</source>
+        <source file="src/settings/tabs/inspector.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/settings/tabs/inspector.lua</source>
+        <source file="src/settings/tabs/presets.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/settings/tabs/presets.lua</source>
+        <source file="src/settings/tabs/preview.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/settings/tabs/preview.lua</source>
+        <source file="src/utils/i18n.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/src/utils/i18n.lua</source>
+        <source file="utils/im_utils.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/utils/im_utils.lua</source>
+        <source file="utils/json.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/utils/json.lua</source>
+        <source file="utils/math_utils.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/utils/math_utils.lua</source>
+        <source file="utils/utils_fx.lua">https://github.com/leeakun373/Lee_Scripts/raw/f991f5cc50b383ca3fac0e46bce7fa8a1538c0b0/RadialMenu_Tool/utils/utils_fx.lua</source>
       </version>
     </reapack>
   </category>
