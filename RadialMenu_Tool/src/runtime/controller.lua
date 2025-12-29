@@ -78,7 +78,8 @@ local R = {
   current_active_sector_id = nil,
 
   -- 窗口位置控制（射手策略）
-  target_gui_pos = nil,      -- 目标GUI坐标 {x, y}（首次显示时捕获的鼠标位置）
+  target_gui_pos = nil,      -- 目标GUI坐标 {x, y}（实时校准，保持兼容性）
+  target_screen_pos = nil,   -- 绝对屏幕坐标锚点 {x, y}（Source of Truth）
 
   -- 【新增】渲染抑制计数器：用于切换模式时"闭眼"几帧
   suppress_render_counter = 0,
@@ -195,6 +196,7 @@ function M.init()
 
   -- 初始化窗口位置相关字段
   R.target_gui_pos = nil
+  R.target_screen_pos = nil
 
   R.script_start_time = reaper.time_precise()
   R.anim_open_start_time = reaper.time_precise()
@@ -330,24 +332,42 @@ function M.loop()
   end
 
   -- ============================================================
-  -- 【终极定位系统】统一锚点计算 (Unified Anchor System)
+  -- 【终极定位系统 v2 - 安全兼容版】
   -- ============================================================
   
-  -- 1. 确保锚点存在 (Ensure Anchor Exists)
-  -- 只有在 R.target_gui_pos 完全缺失时（首次启动），才捕获鼠标作为锚点。
-  -- 之后无论怎么切换模式、刷新缓存，都永远信赖这个锚点，绝不重新捕获。
-  if not R.target_gui_pos then
-      local mx, my = reaper.GetMousePosition()
-      if mx and my then
-          local lx, ly = reaper.ImGui_PointConvertNative(R.ctx, mx, my, false)
-          R.target_gui_pos = { x = lx, y = ly }
+  -- 1. 捕获绝对屏幕锚点 (Source of Truth)
+  -- 我们新增一个 target_screen_pos 作为绝对参考，但保留 target_gui_pos 以维持兼容性
+  if not R.target_screen_pos then
+      -- 如果连 GUI 坐标都没有（首次启动），就抓鼠标
+      if not R.target_gui_pos then
+          local mx, my = reaper.GetMousePosition()
+          if mx and my then
+              R.target_screen_pos = { x = mx, y = my }
+          else
+              R.target_screen_pos = { x = 0, y = 0 } -- 极端情况防御
+          end
       else
-          -- 极端防御：如果连鼠标都抓不到，默认为屏幕原点 (0,0) 但做好标记
-          R.target_gui_pos = { x = 0, y = 0 } 
+          -- 如果已有 GUI 坐标（可能是重载配置保留下来的），尝试反推屏幕坐标（虽不精准但能维持位置）
+          -- 但为了多屏稳定性，最好还是在下一次点击时重置。这里暂且信任现有的逻辑。
+          -- (在这个方案里，target_screen_pos 为空时我们优先抓鼠标，这是最稳的)
+          local mx, my = reaper.GetMousePosition()
+          R.target_screen_pos = { x = mx, y = my }
       end
   end
 
-  -- 2. 计算当前应该显示的窗口尺寸和中心偏移 (Calculate Dimensions & Offset)
+  -- 2. 实时校准 GUI 坐标 (Real-time Calibration)
+  -- 每一帧都重新计算 target_gui_pos，确保它相对于当前 DPI 和窗口位置是准确的。
+  -- 这样做的核心好处：
+  --   a. 解决了 DPI 缩放/窗口移动导致的漂移。
+  --   b. 脚本其他地方读取 R.target_gui_pos 时，依然能拿到有效值，不会报错。
+  if R.target_screen_pos then
+      local anchor_x, anchor_y = reaper.ImGui_PointConvertNative(R.ctx, R.target_screen_pos.x, R.target_screen_pos.y, false)
+      
+      -- 【关键】更新旧变量，骗过所有依赖它的老逻辑
+      R.target_gui_pos = { x = anchor_x, y = anchor_y }
+  end
+
+  -- 3. 计算当前应该显示的窗口尺寸和中心偏移
   local target_w = R.window_width
   local target_h = R.window_height
   local center_offset_x = target_w / 2
@@ -355,7 +375,6 @@ function M.loop()
   local is_baked = submenu_bake_cache.is_baked()
 
   if is_baked then
-      -- 如果已烘焙，使用精确的烘焙尺寸
       local max_bounds = submenu_bake_cache.get_max_bounds()
       if max_bounds.win_w > 0 then
           target_w = max_bounds.win_w
@@ -363,18 +382,13 @@ function M.loop()
           center_offset_x = max_bounds.center_offset_x
           center_offset_y = max_bounds.center_offset_y
           
-          -- 同步更新状态尺寸
           R.window_width = target_w
           R.window_height = target_h
       end
-  else
-      -- 如果未烘焙（中间帧/幽灵帧），保持默认或上一次的尺寸
-      -- 关键：必须保持尺寸稳定，防止因为尺寸突变导致的视觉跳动
   end
 
-  -- 3. 计算最终窗口坐标 (Calculate Final Position)
-  -- 算法：左上角 = 锚点 - 中心偏移量
-  -- 这确保了无论窗口尺寸怎么变（target_w/h 变大变小），窗口永远围绕 target_gui_pos 中心缩放
+  -- 4. 计算最终窗口坐标 (使用刚刚校准过的 target_gui_pos)
+  -- 此时 anchor_x/y 其实就是 R.target_gui_pos.x/y
   local final_pos_x = R.target_gui_pos.x - center_offset_x
   local final_pos_y = R.target_gui_pos.y - center_offset_y
 
@@ -511,6 +525,7 @@ function M.cleanup(opts)
 
   R.is_first_display = true
   R.target_gui_pos = nil
+  R.target_screen_pos = nil
 
   if not opts.keep_key_intercept then
     if R.key and reaper.JS_VKeys_Intercept then
