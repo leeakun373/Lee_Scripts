@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="d7ca49428880c8deed15e3cc897417860cb84dbb" name="Lee_Scripts">
+<index version="1" commit="cf5431a64eff352e5d5c1d091e701c818e6704cc" name="Lee_Scripts">
   <category name="FX/FXMiner">
     <reapack name="Lee_FXMiner - Browser.lua" type="script" desc="Lee_FXMiner - Browser">
       <metadata>
@@ -334,6 +334,11 @@
         <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/3dc6f14153b62bc3d744be80ea52302893653da8/Items/Lee_Items%20-%20Bounce%20Items.lua</source>
       </version>
     </reapack>
+    <reapack name="Lee_Items - Crop selected items to regions.lua" type="script" desc="Crop selected items to regions (根据Region裁切并保留选中Item)">
+      <version name="1.0" author="Gemini" time="2026-05-06T15:49:33Z">
+        <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/23a41ae2ae7e4df690eaa836fe83ab1ea9f346dd/Items/Lee_Items%20-%20Crop%20selected%20items%20to%20regions.lua</source>
+      </version>
+    </reapack>
   </category>
   <category name="Items/Splitter">
     <reapack name="Lee_Items - Splitter Dashboard.lua" type="script" desc="Splitter Dashboard">
@@ -348,6 +353,35 @@
       </metadata>
       <version name="0.1.0" author="Lee" time="2026-05-06T15:08:47Z">
         <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/d7ca49428880c8deed15e3cc897417860cb84dbb/Items/Splitter/Lee_Items%20-%20Splitter%20Dashboard.lua</source>
+      </version>
+    </reapack>
+  </category>
+  <category name="Main">
+    <reapack name="Lee_Main - Woosh Sound Generator.lua" type="script" desc="Lee Main - Woosh Sound Generator">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Sony Woosh API \u25991 ?\u26412 ?\u29983 ?\u25104 ?\u38899 ?\u39057 ?\u65292 ?\u33258 ?\u21160 ?\u25554 ?\u20837 ?\u21040 ? REAPER \u26102 ?\u38388 ?\u32447 ?\u12290 ?\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Model: Woosh-DFlow / Woosh-Flow\u65288 ?\u40664 ?\u35748 ?\u21442 ?\u25968 ?\u38543 ?\u27169 ?\u22411 ?\u65289 ?\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab Sampler: \u20165 ? Flow \u29983 ?\u25928 ?\u65288 ?dopri5/dopri8/bosh3/adaptive_heun\u65289 ?\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab \u25554 ?\u20837 ?\u27169 ?\u24335 ?\u65306 ?\u40664 ?\u35748 ? / \u20445 ?\u25345 ?\u20809 ?\u26631 ? / \u26032 ?\u24314 ?\u36712 ?\u36947 ?\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab \u25209 ?\u37327 ?\u29983 ?\u25104 ? + \u36319 ?\u38543 ?\u39030 ?\u37096 ? Random Seed \u22797 ?\u36873 ?\u26694 ?\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab \u19968 ?\u38190 ?\u21551 ?\u21160 ?\u26412 ?\u22320 ? start_server.bat\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab \u20351 ?\u29992 ? Lee_Scripts/Shared/Toolbox \u26694 ?\u26550 ?\u65288 ?\u20027 ?\u39064 ?/Log/Dock\u65289 ?\sa180\par}
+}
+]]></description>
+      </metadata>
+      <version name="0.3" author="Lee" time="2026-05-06T15:49:33Z">
+        <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/23a41ae2ae7e4df690eaa836fe83ab1ea9f346dd/Main/Lee_Main%20-%20Woosh%20Sound%20Generator.lua</source>
+      </version>
+    </reapack>
+  </category>
+  <category name="Markers">
+    <reapack name="Lee_Markers - Align Selected Items to Same Name Markers.lua" type="script" desc="将选中 Item 的头部对齐到同名 Marker（极度宽容版：忽略大小写、后缀名、首尾空格）">
+      <version name="1.1" author="Gemini" time="2026-05-06T15:49:33Z">
+        <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/bf664d3cb1d78fc890503bef465c40d17bbf796d/Markers/Lee_Markers%20-%20Align%20Selected%20Items%20to%20Same%20Name%20Markers.lua</source>
       </version>
     </reapack>
   </category>
@@ -920,6 +954,13 @@
       </version>
     </reapack>
   </category>
+  <category name="Regions">
+    <reapack name="Lee_Regions - Delete_Regions_In_Time_Selection.lua" type="script" desc="Delete regions within time selection (删除时间选区内的所有Region)">
+      <version name="1.0" author="Gemini" time="2026-05-06T15:49:33Z">
+        <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/bf664d3cb1d78fc890503bef465c40d17bbf796d/Regions/Lee_Regions%20-%20Delete_Regions_In_Time_Selection.lua</source>
+      </version>
+    </reapack>
+  </category>
   <category name="Shared">
     <reapack name="Lee_UI - Demo.lua" type="script" desc="Lee_UI - Demo (entry)">
       <metadata>
@@ -951,6 +992,163 @@
       </metadata>
       <version name="0.2" author="Lee" time="2025-12-17T18:58:58Z">
         <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/19fd5ef80d9304cb8b6c2ce41d38c4e475d03c7f/Shared/Toolbox/Demo_UI.lua</source>
+      </version>
+    </reapack>
+    <reapack name="Lee_UI - Temp Action Bar.lua" type="script" desc="Toolbox - Temp Action Bar (临时动作触发面板)">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 \u22522 ?\u20110 ? Toolbox \u26694 ?\u26550 ?\u30340 ?\u20020 ?\u26102 ? Action Bar\u12290 ?\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab \u25903 ?\u25345 ?\u33258 ?\u30001 ?\u28155 ?\u21152 ?/\u21024 ?\u38500 ?\u27133 ?\u20301 ?\u12290 ?\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab \u33258 ?\u21160 ?\u25345 ?\u20037 ?\u21270 ?\u20445 ?\u23384 ?\u37197 ?\u32622 ?\u22909 ?\u30340 ? Action\u12290 ?\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab \u25903 ?\u25345 ?\u20174 ?\u21098 ?\u36148 ?\u26495 ?\u31896 ?\u36148 ? ID \u24182 ?\u33258 ?\u21160 ?\u33719 ?\u21462 ? Action \u21517 ?\u31216 ?\u65288 ?\u24378 ?\u21270 ?\u29256 ?\u35299 ?\u26512 ?\u65289 ?\u12290 ?\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab \u20132 ?\u20114 ?\u65306 ?\u24038 ?\u38190 ?\u25191 ?\u34892 ?\u65288 ?\u25110 ?\u20998 ?\u37197 ?\u65289 ?\u65292 ?\u21491 ?\u38190 ?\u21628 ?\u20986 ?\u32534 ?\u36753 ?\u33756 ?\u21333 ?\u12290 ?\sa180\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.2" author="Lee" time="2026-05-06T15:49:33Z">
+        <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/f7c59bef52a2ca789c98e88c8a90d8430fc361ea/Shared/Toolbox/Lee_UI%20-%20Temp%20Action%20Bar.lua</source>
+      </version>
+    </reapack>
+  </category>
+  <category name="SonicCompass_Mosaic">
+    <reapack name="mosaic_panel.lua" type="script" desc="SonicCompass Mosaic — 口技参考马赛克回写面板">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 REAPER \u36873 ?\u20013 ? Item \u8594 ? \u28210 ?\u26579 ? \u8594 ? \u21457 ?\u36865 ?\u21040 ? Sonic Compass \u8594 ? \u39532 ?\u36187 ?\u20811 ?\u26816 ?\u32034 ?\u21512 ?\u25104 ? \u8594 ? \u22238 ?\u20889 ? \u22522 ?\u20110 ? Lee_Scripts/Shared/Toolbox \u26694 ?\u26550 ?\u65288 ?ReaImGui\u65289 ?\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.1" author="Lee / SonicCompass" time="2026-05-06T15:49:33Z">
+        <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/cf5431a64eff352e5d5c1d091e701c818e6704cc/SonicCompass_Mosaic/mosaic_panel.lua</source>
+      </version>
+    </reapack>
+  </category>
+  <category name="SonicCompass_Spot">
+    <reapack name="Lee_SonicCompass Spot - Focus Search.lua" type="script" desc="Lee SonicCompass Spot - Focus Search (整合版：唯一对外脚本)">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 \u19968 ?\u20010 ?\u33050 ?\u26412 ?\u23436 ?\u25104 ?\u19977 ?\u20214 ?\u20107 ?\u65292 ?\u26080 ?\u24863 ?\u30693 ?\u21453 ?\u22797 ?\u35302 ?\u21457 ?\u65306 ?\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 1.\tx360\tab \u33258 ?\u21160 ?\u21551 ?\u21160 ? Spot Listener\u65288 ?\u24102 ?\u24515 ?\u36339 ?\u38450 ?\u21452 ?\u24320 ?\u65289 ?\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 2.\tx360\tab \u24377 ? SC \u20027 ?\u39064 ?\u39118 ?\u26684 ?\u30340 ? ReaImGui \u36755 ?\u20837 ?\u26694 ?\u65288 ?\u32570 ? ReaImGui \u26102 ?\u33258 ?\u21160 ?\u22238 ?\u36864 ?\u21407 ?\u29983 ?\u36755 ?\u20837 ?\u26694 ?\u65289 ?\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 3.\tx360\tab POST /api/reaper/focus-search \u25226 ? SC \u25289 ?\u21040 ?\u21069 ?\u21488 ?\u24182 ?\u39044 ?\u22635 ?\u25628 ?\u32034 ?\sa180\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \u34892 ?\u20026 ?\u65306 ?\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab \u37325 ?\u22797 ?\u25353 ?\u24555 ?\u25463 ?\u38190 ?\u19981 ?\u20250 ?\u24377 ?"ReaScript task control"\u23545 ?\u35805 ?\u26694 ?\u65288 ?auto-terminate\u65289 ?\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab \u19981 ?\u20877 ?\u21521 ? REAPER Console \u20889 ?\u20219 ?\u20309 ?\u21551 ?\u21160 ?\u28040 ?\u24687 ?\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab \u36755 ?\u20837 ?\u22238 ?\u36710 ? = \u21457 ?\u36865 ?\u65307 ?Esc / \u20851 ?\u38381 ?\u25353 ?\u38062 ? = \u21462 ?\u28040 ?\u65288 ?listener \u20173 ?\u20445 ?\u30041 ?\u65289 ?\sa180\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 \u20381 ?\u36182 ?\u65306 ?\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab SWS \u25193 ?\u23637 ?\u65288 ?CF_ShellExecute\u65292 ?\u24517 ?\u38656 ?\u65289 ?\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab SonicCompass_Mosaic \u21253 ?\u20869 ?\u30340 ? http_client.lua\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 \bullet \tx360\tab \u21487 ?\u36873 ?\u65306 ?ReaImGui\u65288 ?\u22914 ?\u32570 ?\u22833 ?\u21017 ?\u33258 ?\u21160 ?\u29992 ? GetUserInputs \u20828 ?\u24213 ?\u65289 ?\sa180\par}
+}
+]]></description>
+      </metadata>
+      <version name="0.4.0" author="Lee / SonicCompass" time="2026-05-06T15:49:33Z">
+        <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/cf5431a64eff352e5d5c1d091e701c818e6704cc/SonicCompass_Spot/Lee_SonicCompass%20Spot%20-%20Focus%20Search.lua</source>
+      </version>
+    </reapack>
+  </category>
+  <category name="test/Archive">
+    <reapack name="Lee_FolderMode_Test.lua" type="script" desc="Folder Mode Test - Track Organization Tool">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Automatically organize selected tracks into folder structure\par}
+}
+]]></description>
+      </metadata>
+      <version name="1.0" author="Lee Custom Script" time="2026-05-06T15:49:33Z">
+        <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/cf5431a64eff352e5d5c1d091e701c818e6704cc/test/Archive/Lee_FolderMode_Test.lua</source>
+      </version>
+    </reapack>
+    <reapack name="Lee_Markers - UCS RenameTools.lua" type="script" desc="ImGui Marker/Region Translator Pro (v10.0 Layout Perfected)">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Layout Overhaul:\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 1.\tx360\tab Filters moved to top sub-header (replacing old log).\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 2.\tx360\tab Status Log moved to window footer.\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 3.\tx360\tab Column widths optimized: Preview gets more space.\sa180\par}
+}
+]]></description>
+      </metadata>
+      <version name="10.0" author="HongKun Li" time="2026-05-06T15:49:33Z">
+        <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/cf5431a64eff352e5d5c1d091e701c818e6704cc/test/Archive/Lee_Markers%20-%20UCS%20RenameTools.lua</source>
+      </version>
+    </reapack>
+    <reapack name="Lee_Markers - UCS Translate and Rename.lua" type="script" desc="ImGui Marker/Region Translator Pro (v10.0 Layout Perfected)">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Layout Overhaul:\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 1.\tx360\tab Filters moved to top sub-header (replacing old log).\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 2.\tx360\tab Status Log moved to window footer.\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 3.\tx360\tab Column widths optimized: Preview gets more space.\sa180\par}
+}
+]]></description>
+      </metadata>
+      <version name="10.0" author="HongKun Li" time="2026-05-06T15:49:33Z">
+        <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/cf5431a64eff352e5d5c1d091e701c818e6704cc/test/Archive/Lee_Markers%20-%20UCS%20Translate%20and%20Rename.lua</source>
+      </version>
+    </reapack>
+    <reapack name="Lee_Test - Count_Selected_Items_Popup.lua" type="script">
+      <version name="1.0" author="Hongkun helper" time="2026-05-06T15:49:33Z">
+        <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/cf5431a64eff352e5d5c1d091e701c818e6704cc/test/Archive/Lee_Test%20-%20Count_Selected_Items_Popup.lua</source>
+      </version>
+    </reapack>
+    <reapack name="Lee_Test - Reigon_Translator.lua" type="script" desc="ImGui Marker/Region Translator Pro (v2.4 Big Close Button)">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 UI Update: Added a large Close button at the bottom for easier exit. Logic: Copy respects filters, Smart Paste by ID.\par}
+}
+]]></description>
+      </metadata>
+      <version name="2.4" author="Gemini Partner" time="2026-05-06T15:49:33Z">
+        <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/cf5431a64eff352e5d5c1d091e701c818e6704cc/test/Archive/Lee_Test%20-%20Reigon_Translator.lua</source>
+      </version>
+    </reapack>
+    <reapack name="Lee_Test - Rename tools.lua" type="script" desc="ImGui Marker/Region Translator Pro (v10.0 Layout Perfected)">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Layout Overhaul:\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 1.\tx360\tab Filters moved to top sub-header (replacing old log).\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 2.\tx360\tab Status Log moved to window footer.\par}
+{\pard \ql \f0 \sa0 \li360 \fi-360 3.\tx360\tab Column widths optimized: Preview gets more space.\sa180\par}
+}
+]]></description>
+      </metadata>
+      <version name="10.0" author="Gemini Partner" time="2026-05-06T15:49:33Z">
+        <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/cf5431a64eff352e5d5c1d091e701c818e6704cc/test/Archive/Lee_Test%20-%20Rename%20tools.lua</source>
+      </version>
+    </reapack>
+    <reapack name="Lee_Workflow_JumpToNextItemOnTrack.lua" type="script">
+      <version name="1.0" author="Gemini" time="2026-05-06T15:49:33Z">
+        <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/cf5431a64eff352e5d5c1d091e701c818e6704cc/test/Archive/Lee_Workflow_JumpToNextItemOnTrack.lua</source>
+      </version>
+    </reapack>
+    <reapack name="Lee_Workflow_JumpToPreviousItemOnTrack.lua" type="script">
+      <version name="1.0" author="Gemini" time="2026-05-06T15:49:33Z">
+        <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/cf5431a64eff352e5d5c1d091e701c818e6704cc/test/Archive/Lee_Workflow_JumpToPreviousItemOnTrack.lua</source>
       </version>
     </reapack>
   </category>
