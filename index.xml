@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="a76891584c79cbbf712832ea41df1134056ef202" name="Lee_Scripts">
+<index version="1" commit="d7ca49428880c8deed15e3cc897417860cb84dbb" name="Lee_Scripts">
   <category name="FX/FXMiner">
     <reapack name="Lee_FXMiner - Browser.lua" type="script" desc="Lee_FXMiner - Browser">
       <metadata>
@@ -332,6 +332,22 @@
       <version name="1.0" author="BuyOne" time="2025-12-13T10:59:55Z">
         <changelog><![CDATA[Initial release]]></changelog>
         <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/3dc6f14153b62bc3d744be80ea52302893653da8/Items/Lee_Items%20-%20Bounce%20Items.lua</source>
+      </version>
+    </reapack>
+  </category>
+  <category name="Items/Splitter">
+    <reapack name="Lee_Items - Splitter Dashboard.lua" type="script" desc="Splitter Dashboard">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 Unified dashboard for splitter settings and run workflow.\par}
+}
+]]></description>
+      </metadata>
+      <version name="0.1.0" author="Lee" time="2026-05-06T15:08:47Z">
+        <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/d7ca49428880c8deed15e3cc897417860cb84dbb/Items/Splitter/Lee_Items%20-%20Splitter%20Dashboard.lua</source>
       </version>
     </reapack>
   </category>
