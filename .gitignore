@@ -28,4 +28,8 @@ __pycache__/
 # Splitter 本地打包产物（改为 Release 分发）
 Items/Splitter/bin/
 
+# 本地文档目录（不上传 GitHub）
+Doc/
+doc/
+
 
