@@ -17,8 +17,15 @@ desktop.ini
 # 日志文件
 *.log
 
+# Python 缓存
+__pycache__/
+*.pyc
+
 # 备份文件
 *.bak
 *.backup
+
+# Splitter 本地打包产物（改为 Release 分发）
+Items/Splitter/bin/
 
 
