@@ -1,0 +1,1 @@
+{"status": "error", "request_id": "34807343658", "message": "Pool build failed: Unable to allocate 130. GiB for an array with shape (21307, 1637245) and data type float32"}
