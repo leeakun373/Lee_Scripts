@@ -32,4 +32,7 @@ Items/Splitter/bin/
 Doc/
 doc/
 
+# 根目录 README 仅本地使用（不上传 GitHub）
+README.md
+
 
