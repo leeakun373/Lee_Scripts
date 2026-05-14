@@ -3,6 +3,10 @@
 
 local M = {}
 
+local _, script_path = reaper.get_action_context()
+local script_dir = script_path:match("^(.*[\\/])")
+local Err = dofile(script_dir .. "src/splitter_errors.lua")
+
 local STEMS = {
   { key = "tonal", suffix = "Tonal" },
   { key = "transient", suffix = "Transient" },
@@ -19,8 +23,8 @@ local function fail(message_text)
 end
 
 local function file_exists(path)
-  local f = io.open(path, "rb")
-  if f then
+  local ok, f = pcall(io.open, path, "rb")
+  if ok and f then
     f:close()
     return true
   end
@@ -71,7 +75,7 @@ local function new_tracks(item_info)
     reaper.InsertTrackAtIndex(target_index, true)
     local track = get_track_at(target_index)
     if not track then
-      return fail("Unable to create target track for " .. stem.suffix .. ".")
+      return fail(Err.wrap("TRACK_NEW_FAIL", "Unable to create target track for " .. stem.suffix .. "."))
     end
     set_track_name(track, base_name .. "_" .. stem.suffix)
     tracks[#tracks + 1] = track
@@ -102,7 +106,7 @@ local function reuse_tracks(item_info)
     reaper.InsertTrackAtIndex(target_index, true)
     local track = get_track_at(target_index)
     if not track then
-      return fail("Unable to create missing reuse track.")
+      return fail(Err.wrap("TRACK_REUSE_FAIL", "Unable to create missing reuse track."))
     end
     tracks[#tracks + 1] = track
   end
@@ -123,22 +127,22 @@ end
 
 local function create_aligned_item(track, file_path, item_info)
   if not file_exists(file_path) then
-    return fail("Generated stem file does not exist:\n" .. tostring(file_path))
+    return fail(Err.wrap("STEM_FILE_MISSING", "Generated stem file does not exist:\n" .. tostring(file_path)))
   end
 
   local source = reaper.PCM_Source_CreateFromFile(file_path)
   if not source then
-    return fail("Unable to create PCM source from file:\n" .. tostring(file_path))
+    return fail(Err.wrap("STEM_PCM_FAIL", "Unable to create PCM source from file:\n" .. tostring(file_path)))
   end
 
   local item = reaper.AddMediaItemToTrack(track)
   if not item then
-    return fail("Unable to create media item on target track.")
+    return fail(Err.wrap("STEM_ITEM_FAIL", "Unable to create media item on target track."))
   end
 
   local take = reaper.AddTakeToMediaItem(item)
   if not take then
-    return fail("Unable to create take for generated stem item.")
+    return fail(Err.wrap("STEM_TAKE_FAIL", "Unable to create take for generated stem item."))
   end
 
   reaper.SetMediaItemTake_Source(take, source)
@@ -154,7 +158,7 @@ end
 
 function M.write_stems(result, settings)
   if not result or not result.output_paths or not result.item_info then
-    return fail("Splitter result is incomplete; cannot write stems.")
+    return fail(Err.wrap("RESULT_INCOMPLETE", "Splitter result is incomplete; cannot write stems."))
   end
 
   local item_info = result.item_info

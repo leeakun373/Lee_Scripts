@@ -27,12 +27,13 @@ __pycache__/
 
 # Splitter 本地打包产物（改为 Release 分发）
 Items/Splitter/bin/
+Items/Splitter/build/
 
 # 本地文档目录（不上传 GitHub）
 Doc/
 doc/
 
 # 根目录 README 仅本地使用（不上传 GitHub）
-README.md
+/README.md
 
 

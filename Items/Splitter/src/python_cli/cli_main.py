@@ -121,7 +121,8 @@ def run(argv: Sequence[str] | None = None) -> int:
     sf.write(str(paths["transient"]), transient, sample_rate, subtype="PCM_24")
     sf.write(str(paths["noise"]), noise, sample_rate, subtype="PCM_24")
 
-    print(json.dumps({name: str(path) for name, path in paths.items()}, ensure_ascii=False))
+    # ASCII-only JSON survives cmd.exe redirect code pages; Lua decoder expands \u escapes.
+    print(json.dumps({name: str(path) for name, path in paths.items()}, ensure_ascii=True), flush=True)
     return 0
 
 
@@ -130,7 +131,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run(argv)
     except SystemExit:
         raise
-    except Exception:
+    except Exception as exc:
+        sys.stderr.write(
+            "[LeeSplitterCLI:EXCEPTION] " + type(exc).__name__ + ": " + str(exc) + "\n"
+        )
         traceback.print_exc(file=sys.stderr)
         return 1
 

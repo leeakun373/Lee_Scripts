@@ -1,3 +1,17 @@
+"""Build the Lee Stem Splitter CLI (PyInstaller one-dir).
+
+部署到其它电脑：在本机成功执行本脚本后，将整个 Items/Splitter 目录（含 bin/LeeStemSplitterCLI/）
+覆盖到目标机的 REAPER Scripts 下对应路径即可。
+
+依赖：
+  pip install pyinstaller soundfile numpy scipy scikit-learn librosa ...
+  以及 SONICCOMPASS_ROOT 环境变量指向含 core/stem_splitter/engine.py 的 SonicCompass 仓库；
+  若未设置，默认使用 Windows 路径 E:\\Audio_Projects\\Tools\\SonicCompass（可按 --source-root 覆盖）。
+
+示例：
+  python build_exe.py
+  python build_exe.py --source-root D:\\repos\\SonicCompass --clean
+"""
 from __future__ import annotations
 
 import argparse

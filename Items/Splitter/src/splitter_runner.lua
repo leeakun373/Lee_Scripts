@@ -5,6 +5,8 @@ local script_dir = script_path:match("^(.*[\\/])")
 
 local config = dofile(script_dir .. "src/splitter_config.lua")
 local item_reader = dofile(script_dir .. "src/splitter_item_reader.lua")
+local json_min = dofile(script_dir .. "src/splitter_json_min.lua")
+local Err = dofile(script_dir .. "src/splitter_errors.lua")
 
 local EXE_BASENAME = "LeeStemSplitterCLI"
 
@@ -140,7 +142,7 @@ local function get_project_output_dir()
 
   project_path = normalize_path(project_path)
   if is_temp_project_path(project_path) then
-    return nil, "请先保存 REAPER 工程以指定音频生成路径"
+    return nil, Err.wrap("CLI_PROJECT_PATH", "请先保存 REAPER 工程以指定音频生成路径")
   end
 
   return project_path
@@ -165,19 +167,32 @@ local function build_cli_command(exe_path, source_path, outdir, settings)
     .. " --outdir " .. quote_path(outdir)
 end
 
-local function build_done_file(outdir)
-  local sep = path_separator()
+local function new_run_id()
   local guid = reaper.genGuid and reaper.genGuid() or tostring(math.floor(reaper.time_precise() * 1000000))
   guid = tostring(guid):gsub("[{}%-]", ""):gsub("[^%w_]", "")
-  return normalize_path(outdir:gsub("[/\\]+$", "") .. sep .. ".splitter_done_" .. guid)
+  return guid
+end
+
+local function build_done_file(outdir, run_id)
+  local sep = path_separator()
+  return normalize_path(outdir:gsub("[/\\]+$", "") .. sep .. ".splitter_done_" .. run_id)
+end
+
+local function build_manifest_file(outdir, run_id)
+  local sep = path_separator()
+  return normalize_path(outdir:gsub("[/\\]+$", "") .. sep .. ".splitter_stdout_" .. run_id)
 end
 
 local function build_vbs_file(outdir, done_file)
   return done_file .. ".vbs"
 end
 
-local function start_background_process(cli_command, done_file, vbs_file)
-  local cmd_payload = cli_command .. " > nul 2>&1 & echo %ERRORLEVEL% > " .. quote_path(done_file)
+local function start_background_process(cli_command, done_file, vbs_file, manifest_file)
+  local cmd_payload = cli_command
+    .. " > "
+    .. quote_path(manifest_file)
+    .. " 2>&1 & echo %ERRORLEVEL% > "
+    .. quote_path(done_file)
   local cmd_line = 'cmd /c "' .. cmd_payload .. '"'
   local vbs_content = table.concat({
     'Set WshShell = CreateObject("WScript.Shell")',
@@ -186,17 +201,55 @@ local function start_background_process(cli_command, done_file, vbs_file)
   }, "\r\n")
 
   if not write_text_file(vbs_file, vbs_content) then
-    return nil, "Unable to create VBS launcher file."
+    return nil, Err.wrap("CLI_VBS_WRITE", "Unable to create VBS launcher file.")
   end
 
   local launch = "wscript.exe " .. quote_path(vbs_file)
   local ok = os.execute(launch)
   if ok == false or ok == nil then
     delete_file(vbs_file)
-    return nil, "Unable to start VBS launcher."
+    return nil, Err.wrap("CLI_VBS_LAUNCH", "Unable to start VBS launcher.")
   end
 
   return true
+end
+
+local STEM_KEYS = { "tonal", "transient", "noise" }
+
+local function apply_stdout_paths_to_result(raw, output_paths)
+  if type(raw) ~= "string" or raw == "" then
+    return false
+  end
+  local d = json_min.decode(raw)
+  if type(d) ~= "table" then
+    return false
+  end
+  local t, tr, n = d.tonal, d.transient, d.noise
+  if type(t) ~= "string" or t == "" or type(tr) ~= "string" or tr == "" or type(n) ~= "string" or n == "" then
+    return false
+  end
+  output_paths.tonal = normalize_path(t)
+  output_paths.transient = normalize_path(tr)
+  output_paths.noise = normalize_path(n)
+  return true
+end
+
+local function all_stem_files_exist(output_paths)
+  for _, key in ipairs(STEM_KEYS) do
+    local p = output_paths[key]
+    if not p or not file_exists(p) then
+      return false
+    end
+  end
+  return true
+end
+
+local function format_stem_path_lines(output_paths)
+  local lines = {}
+  for _, key in ipairs(STEM_KEYS) do
+    lines[#lines + 1] = tostring(key) .. ": " .. tostring(output_paths[key] or "")
+  end
+  return table.concat(lines, "\n")
 end
 
 function M.build_command_preview(source_path, settings)
@@ -222,7 +275,7 @@ function M.run(item_info, settings, on_success, on_error)
   settings = config.normalize_settings(settings or config.load_settings())
   local exe_path = get_cli_exe_path()
   if not file_exists(exe_path) then
-    return nil, "Splitter CLI executable not found:\n" .. exe_path
+    return nil, Err.wrap("CLI_EXE_MISSING", "Splitter CLI executable not found:\n" .. exe_path)
   end
 
   local outdir, outdir_error = get_project_output_dir()
@@ -232,10 +285,12 @@ function M.run(item_info, settings, on_success, on_error)
 
   local output_paths = build_output_paths(item_info.source_path, outdir)
   local cli_command = build_cli_command(exe_path, item_info.source_path, output_paths.outdir, settings)
-  local done_file = build_done_file(output_paths.outdir)
+  local run_id = new_run_id()
+  local done_file = build_done_file(output_paths.outdir, run_id)
+  local manifest_file = build_manifest_file(output_paths.outdir, run_id)
   local vbs_file = build_vbs_file(output_paths.outdir, done_file)
 
-  local started, start_error = start_background_process(cli_command, done_file, vbs_file)
+  local started, start_error = start_background_process(cli_command, done_file, vbs_file, manifest_file)
   if not started then
     return nil, start_error
   end
@@ -246,12 +301,14 @@ function M.run(item_info, settings, on_success, on_error)
     command = cli_command,
     done_file = done_file,
     vbs_file = vbs_file,
+    manifest_file = manifest_file,
     output_paths = output_paths,
   }
 
   local function finish_error(err)
     delete_file(done_file)
     delete_file(vbs_file)
+    delete_file(manifest_file)
     if on_error then
       on_error(err, result)
     end
@@ -264,17 +321,66 @@ function M.run(item_info, settings, on_success, on_error)
       return
     end
 
+    local exit_code = tonumber(tostring(content):match("(-?%d+)"))
     delete_file(done_file)
     delete_file(vbs_file)
 
-    local exit_code = tonumber(tostring(content):match("(-?%d+)"))
     if exit_code ~= 0 then
-      finish_error("Splitter CLI failed with exit code " .. tostring(exit_code or "unknown"))
+      local err_blob = read_text_file(manifest_file)
+      delete_file(manifest_file)
+      local msg = Err.wrap(
+        "CLI_FAILED",
+        "Splitter CLI failed with exit code " .. tostring(exit_code or "unknown")
+      )
+      if type(err_blob) == "string" and err_blob ~= "" then
+        local clip = err_blob
+        if #clip > 4000 then
+          clip = clip:sub(1, 4000) .. "\n...(truncated)"
+        end
+        msg = msg .. "\n\n" .. clip
+      end
+      finish_error(msg)
       return
     end
 
-    if on_success then
-      on_success(result)
+    local raw_stdout = read_text_file(manifest_file)
+    delete_file(manifest_file)
+    apply_stdout_paths_to_result(raw_stdout, result.output_paths)
+
+    local wait_ticks = 0
+    local max_wait_ticks = 150
+
+    local function finalize_success()
+      if on_success then
+        on_success(result)
+      end
+    end
+
+    local function wait_for_stem_files()
+      if all_stem_files_exist(result.output_paths) then
+        finalize_success()
+        return
+      end
+      wait_ticks = wait_ticks + 1
+      if wait_ticks >= max_wait_ticks then
+        finish_error(
+          Err.wrap(
+            "CLI_STEMS_TIMEOUT",
+            "CLI 已成功结束，但在磁盘上仍无法打开全部输出文件（已等待 "
+              .. tostring(max_wait_ticks)
+              .. " 帧）。常见于杀毒扫描、企业受控文件夹或云同步延迟。\n"
+              .. format_stem_path_lines(result.output_paths)
+          )
+        )
+        return
+      end
+      reaper.defer(wait_for_stem_files)
+    end
+
+    if all_stem_files_exist(result.output_paths) then
+      finalize_success()
+    else
+      reaper.defer(wait_for_stem_files)
     end
   end
 

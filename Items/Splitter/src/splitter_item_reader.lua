@@ -3,6 +3,10 @@
 
 local M = {}
 
+local _, script_path = reaper.get_action_context()
+local script_dir = script_path:match("^(.*[\\/])")
+local Err = dofile(script_dir .. "src/splitter_errors.lua")
+
 local function message(message_text)
   reaper.ShowMessageBox(tostring(message_text), "Lee Splitter", 0)
 end
@@ -34,26 +38,26 @@ function M.read_selected_item(options)
 
   local selected_count = reaper.CountSelectedMediaItems(0)
   if selected_count ~= 1 then
-    return fail("Lee Splitter V1 supports exactly one selected media item.", silent)
+    return fail(Err.wrap("ITEM_SELECTION", "Lee Splitter V1 supports exactly one selected media item."), silent)
   end
 
   local item = reaper.GetSelectedMediaItem(0, 0)
   if not item then
-    return fail("Unable to read the selected media item.", silent)
+    return fail(Err.wrap("ITEM_READ", "Unable to read the selected media item."), silent)
   end
 
   local take = reaper.GetActiveTake(item)
   if not take then
-    return fail("The selected item has no active take.", silent)
+    return fail(Err.wrap("ITEM_NO_TAKE", "The selected item has no active take."), silent)
   end
 
   if reaper.TakeIsMIDI(take) then
-    return fail("The selected item is MIDI. Please select an audio item.", silent)
+    return fail(Err.wrap("ITEM_MIDI", "The selected item is MIDI. Please select an audio item."), silent)
   end
 
   local source_path = get_source_path(take)
   if not source_path then
-    return fail("Unable to resolve the selected take source file path.", silent)
+    return fail(Err.wrap("ITEM_SOURCE_PATH", "Unable to resolve the selected take source file path."), silent)
   end
 
   local position = reaper.GetMediaItemInfo_Value(item, "D_POSITION")

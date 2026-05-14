@@ -5,6 +5,7 @@ local config = dofile(script_dir .. "src/splitter_config.lua")
 local item_reader = dofile(script_dir .. "src/splitter_item_reader.lua")
 local runner = dofile(script_dir .. "src/splitter_runner.lua")
 local track_writer = dofile(script_dir .. "src/splitter_track_writer.lua")
+local Err = dofile(script_dir .. "src/splitter_errors.lua")
 local ROOT_DIR = script_dir:match("^(.*[\\/]Lee_Scripts[\\/])") or ""
 local SHARED_WIDGETS = ROOT_DIR ~= "" and (ROOT_DIR .. "Shared/Toolbox/framework/widgets.lua") or ""
 local SHARED_COLORS = ROOT_DIR ~= "" and (ROOT_DIR .. "Shared/Toolbox/framework/ui_colors.lua") or ""
@@ -19,7 +20,7 @@ local STATUS = {
 
 local function ensure_imgui()
   if not reaper.ImGui_CreateContext then
-    error("ReaImGui is required. Please install the ReaImGui extension via ReaPack.")
+    error(Err.wrap("UI_IMGUI_MISSING", "ReaImGui is required. Please install the ReaImGui extension via ReaPack."))
   end
 end
 
@@ -298,7 +299,7 @@ local function start_split(state)
         reaper.Undo_BeginBlock()
         local write_result, err = track_writer.write_stems(result, state.settings)
         if not write_result then
-          error(err or "Unable to write stems.")
+          error(err or Err.wrap("UI_WRITE_UNKNOWN", "Unable to write stems."))
         end
       if state.settings.mute_source_item then
         reaper.SetMediaItemInfo_Value(result.item_info.item, "B_MUTE", 1)
