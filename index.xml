@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<index version="1" commit="cf5431a64eff352e5d5c1d091e701c818e6704cc" name="Lee_Scripts">
+<index version="1" commit="ac202a1dd568202965ecd6ef724a0c0141cfc5d7" name="Lee_Scripts">
   <category name="FX/FXMiner">
     <reapack name="Lee_FXMiner - Browser.lua" type="script" desc="Lee_FXMiner - Browser">
       <metadata>
@@ -337,6 +337,22 @@
     <reapack name="Lee_Items - Crop selected items to regions.lua" type="script" desc="Crop selected items to regions (根据Region裁切并保留选中Item)">
       <version name="1.0" author="Gemini" time="2026-05-06T15:49:33Z">
         <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/23a41ae2ae7e4df690eaa836fe83ab1ea9f346dd/Items/Lee_Items%20-%20Crop%20selected%20items%20to%20regions.lua</source>
+      </version>
+    </reapack>
+  </category>
+  <category name="Items/DropStation">
+    <reapack name="Lee_Items - Drop Station.lua" type="script" desc="Drop Station — 将 Item 作为文件路径拖拽到外部 / 复制路径">
+      <metadata>
+        <description><![CDATA[{\rtf1\ansi\deff0{\fonttbl{\f0 \fswiss Helvetica;}{\f1 \fmodern Courier;}}
+{\colortbl;\red255\green0\blue0;\red0\green0\blue255;}
+\widowctrl\hyphauto
+
+{\pard \ql \f0 \sa180 \li0 \fi0 \u24748 ?\u28014 ?\u24037 ?\u20855 ?\u65306 ?\u25353 ? Source / Dry Clip / Wet Clip \u35299 ?\u26512 ?\u26412 ?\u22320 ?\u25991 ?\u20214 ?\u36335 ?\u24452 ?\u65307 ? Windows \u19979 ?\u36890 ?\u36807 ? C++ \u25193 ?\u23637 ? reaper_dropstation.dll \u21457 ?\u36215 ?\u31995 ?\u32479 ?\u32423 ?\u25991 ?\u20214 ?\u25302 ?\u25341 ?\u65288 ?CF_HDROP\u65289 ?\u65292 ? \u20854 ?\u23427 ?\u24179 ?\u21488 ?\u25110 ?\u38750 ?\u25193 ?\u23637 ?\u29615 ?\u22659 ?\u35831 ?\u20351 ?\u29992 ? Copy Path\u65307 ?\u25903 ?\u25345 ?\u29992 ?\u31995 ?\u32479 ?\u40664 ?\u35748 ?\u31243 ?\u24207 ?\u25171 ?\u24320 ?\u25991 ?\u20214 ?\u12289 ?\u22312 ?\u36164 ?\u28304 ?\u31649 ?\u29702 ?\u22120 ?\u20013 ?\u26174 ?\u31034 ?\u12290 ?\par}
+}
+]]></description>
+      </metadata>
+      <version name="0.1.0" author="Lee" time="2026-05-14T17:34:52Z">
+        <source main="main">https://github.com/leeakun373/Lee_Scripts/raw/ac202a1dd568202965ecd6ef724a0c0141cfc5d7/Items/DropStation/Lee_Items%20-%20Drop%20Station.lua</source>
       </version>
     </reapack>
   </category>
