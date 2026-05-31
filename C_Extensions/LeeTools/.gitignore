@@ -1,9 +1,10 @@
 /build/
 /include/*.h
+/third_party/
 CMakeCache.txt
 cmake_install.cmake
 *.vcxproj*
 *.sln
 CMakeFiles/
 x64/
-reaper_dropstation.dir/
+reaper_lee_tools.dir/
