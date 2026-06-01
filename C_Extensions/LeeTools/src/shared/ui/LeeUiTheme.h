@@ -26,8 +26,11 @@ void EnsureFonts(ImGui_Context* ctx, ThemeFonts& fonts);
 
 void DestroyFonts(ImGui_Context* ctx, ThemeFonts& fonts);
 
-// Call once per ImGui frame, before ImGui::Begin. Pushes StyleVar + Col_* overrides.
+// Full Toolbox skin for large windows (e.g. Drop Station).
 FrameTheme BeginFrame(ImGui_Context* ctx, ThemeFonts& fonts);
+
+// Lightweight skin for small momentary popups (e.g. Item Hub).
+FrameTheme BeginCompactFrame(ImGui_Context* ctx, ThemeFonts& fonts);
 
 // Call after all ImGui::End for this frame.
 void EndFrame(ImGui_Context* ctx, const FrameTheme& frame);

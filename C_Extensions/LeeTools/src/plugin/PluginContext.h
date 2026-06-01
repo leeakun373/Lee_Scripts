@@ -40,6 +40,7 @@ struct ApiTable {
   int (*CountSelectedMediaItems)(void* proj) = nullptr;
   void* (*GetSelectedMediaItem)(void* proj, int selitem) = nullptr;
   void* (*GetActiveTake)(void* item) = nullptr;
+  void (*SetActiveTake)(void* item, void* take) = nullptr;
   void* (*GetMediaItemTake_Source)(void* take) = nullptr;
   void (*GetMediaSourceFileName)(void* source, char* buf, int bufsz) = nullptr;
   bool (*GetSetMediaItemTakeInfo_String)(void* take, const char* parmname,
@@ -92,6 +93,23 @@ struct ApiTable {
   bool (*InsertEnvelopePoint)(void* envelope, double time, double value, int shape, int tension,
                               bool selected, bool* noSortInOut) = nullptr;
   int (*GetEnvelopeScalingMode)(void* envelope) = nullptr;
+
+  // Item Hub: PCM source / reverse (native + optional SWS)
+  void* (*GetSetMediaItemTakeInfo)(void* take, const char* parmname, void* set_new_value) = nullptr;
+  void (*GetMediaSourceType)(void* source, char* typebuf, int typebuf_sz) = nullptr;
+  double (*GetMediaSourceLength)(void* source, bool* lengthIsQNOut) = nullptr;
+  void* (*GetMediaSourceParent)(void* source) = nullptr;
+  bool (*PCM_Source_GetSectionInfo)(void* src, double* offsOut, double* lenOut, bool* revOut) =
+      nullptr;
+  void* (*PCM_Source_CreateFromType)(const char* sourcetype) = nullptr;
+  void (*PCM_Source_Destroy)(void* src) = nullptr;
+  bool (*BR_GetMediaSourceProperties)(void* take, bool* sectionOut, double* startOut,
+                                      double* lengthOut, double* fadeOut, bool* reverseOut) =
+      nullptr;
+  bool (*BR_SetMediaSourceProperties)(void* take, bool section, double start, double length,
+                                      double fade, bool reverse) = nullptr;
+  bool (*CF_PCM_Source_SetSectionInfo)(void* section, void* source, double offset, double length,
+                                       bool reverse, double* fadeInOptional) = nullptr;
 };
 
 // Returns the cached function pointer table. Always non-null; individual

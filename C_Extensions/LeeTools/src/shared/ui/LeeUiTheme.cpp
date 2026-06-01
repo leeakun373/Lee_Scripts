@@ -150,6 +150,32 @@ int push_toolbox_style(ImGui_Context* ctx) {
   return n;
 }
 
+int push_compact_colors(ImGui_Context* ctx) {
+  int n = 0;
+  using namespace colors;
+  push_color(ctx, ImGui::Col_WindowBg, WindowBg, n);
+  push_color(ctx, ImGui::Col_Text, Text, n);
+  push_color(ctx, ImGui::Col_TextDisabled, TextDisabled, n);
+  push_color(ctx, ImGui::Col_Button, Button, n);
+  push_color(ctx, ImGui::Col_ButtonHovered, ButtonHovered, n);
+  push_color(ctx, ImGui::Col_ButtonActive, ButtonActive, n);
+  push_color(ctx, ImGui::Col_Border, -2139062144, n);
+  push_color(ctx, ImGui::Col_Header, Header, n);
+  push_color(ctx, ImGui::Col_HeaderHovered, HeaderHovered, n);
+  push_color(ctx, ImGui::Col_FrameBg, FrameBg, n);
+  return n;
+}
+
+int push_compact_style(ImGui_Context* ctx) {
+  int n = 0;
+  push_var2(ctx, ImGui::StyleVar_WindowPadding, 8.0, 4.0, n);
+  push_var2(ctx, ImGui::StyleVar_FramePadding, 4.0, 3.0, n);
+  push_var2(ctx, ImGui::StyleVar_ItemSpacing, 4.0, 4.0, n);
+  push_var1(ctx, ImGui::StyleVar_WindowRounding, 8.0, n);
+  push_var1(ctx, ImGui::StyleVar_WindowBorderSize, 1.0, n);
+  return n;
+}
+
 }  // namespace
 
 void EnsureFonts(ImGui_Context* ctx, ThemeFonts& fonts) {
@@ -189,6 +215,19 @@ FrameTheme BeginFrame(ImGui_Context* ctx, ThemeFonts& fonts) {
   EnsureFonts(ctx, fonts);
   frame.var_count = push_toolbox_style(ctx);
   frame.color_count = push_toolbox_colors(ctx);
+  if (fonts.default_font && ImGui::PushFont) {
+    ImGui::PushFont(ctx, fonts.default_font, 14.0);
+    frame.default_font_pushed = true;
+  }
+  return frame;
+}
+
+FrameTheme BeginCompactFrame(ImGui_Context* ctx, ThemeFonts& fonts) {
+  FrameTheme frame;
+  if (!ctx || !lee::reaimgui::Ready()) return frame;
+  EnsureFonts(ctx, fonts);
+  frame.var_count = push_compact_style(ctx);
+  frame.color_count = push_compact_colors(ctx);
   if (fonts.default_font && ImGui::PushFont) {
     ImGui::PushFont(ctx, fonts.default_font, 14.0);
     frame.default_font_pushed = true;

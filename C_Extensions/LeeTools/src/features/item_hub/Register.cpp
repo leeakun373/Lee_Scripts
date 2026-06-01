@@ -17,6 +17,13 @@ void TimerTick() {
 
 bool g_item_hub_timer = false;
 
+void EnsureItemHubTimer() {
+  lee::EnsureAppTimer();
+  if (g_item_hub_timer) return;
+  lee::RegisterTimerCallback(TimerTick);
+  g_item_hub_timer = true;
+}
+
 void WarnReaImGuiMissing() {
   HWND owner = nullptr;
   if (const auto& api = lee::Api(); api.GetMainHwnd) owner = api.GetMainHwnd();
@@ -32,16 +39,19 @@ void OnTrigger() {
     WarnReaImGuiMissing();
     return;
   }
-  lee::EnsureAppTimer();
-  if (!g_item_hub_timer) {
-    lee::RegisterTimerCallback(TimerTick);
-    g_item_hub_timer = true;
+  EnsureItemHubTimer();
+
+  if (GetHubWindow().is_active()) {
+    return;
   }
+
   void* proj = nullptr;
   if (const auto& api = lee::Api(); api.EnumProjects) {
     proj = api.EnumProjects(-1, nullptr, 0);
   }
-  if (!GetHubWindow().open_at_cursor(proj)) {
+  if (GetHubWindow().open_at_cursor(proj)) {
+    GetHubWindow().tick();
+  } else {
     GetHubWindow().close();
   }
 }
@@ -52,6 +62,10 @@ void Register() {
   lee::RegisterCustomAction("Lee_ItemHub_Show",
                             "Lee: Item Hub — Hold to adjust",
                             OnTrigger);
+  if (lee::reaimgui::Ready()) {
+    EnsureItemHubTimer();
+    GetHubWindow().prepare();
+  }
 }
 
 void Shutdown() {

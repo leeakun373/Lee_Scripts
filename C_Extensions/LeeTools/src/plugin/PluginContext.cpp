@@ -24,6 +24,7 @@ void LoadApiTable(reaper_plugin_info_t* rec) {
   LoadFn(rec, "CountSelectedMediaItems",         g_api.CountSelectedMediaItems);
   LoadFn(rec, "GetSelectedMediaItem",            g_api.GetSelectedMediaItem);
   LoadFn(rec, "GetActiveTake",                   g_api.GetActiveTake);
+  LoadFn(rec, "SetActiveTake",                   g_api.SetActiveTake);
   LoadFn(rec, "GetMediaItemTake_Source",         g_api.GetMediaItemTake_Source);
   LoadFn(rec, "GetMediaSourceFileName",          g_api.GetMediaSourceFileName);
   LoadFn(rec, "GetSetMediaItemTakeInfo_String",  g_api.GetSetMediaItemTakeInfo_String);
@@ -63,6 +64,16 @@ void LoadApiTable(reaper_plugin_info_t* rec) {
   LoadFn(rec, "SetEnvelopePoint",                g_api.SetEnvelopePoint);
   LoadFn(rec, "InsertEnvelopePoint",             g_api.InsertEnvelopePoint);
   LoadFn(rec, "GetEnvelopeScalingMode",          g_api.GetEnvelopeScalingMode);
+  LoadFn(rec, "GetSetMediaItemTakeInfo",         g_api.GetSetMediaItemTakeInfo);
+  LoadFn(rec, "GetMediaSourceType",              g_api.GetMediaSourceType);
+  LoadFn(rec, "GetMediaSourceLength",            g_api.GetMediaSourceLength);
+  LoadFn(rec, "GetMediaSourceParent",            g_api.GetMediaSourceParent);
+  LoadFn(rec, "PCM_Source_GetSectionInfo",       g_api.PCM_Source_GetSectionInfo);
+  LoadFn(rec, "PCM_Source_CreateFromType",       g_api.PCM_Source_CreateFromType);
+  LoadFn(rec, "PCM_Source_Destroy",              g_api.PCM_Source_Destroy);
+  LoadFn(rec, "BR_GetMediaSourceProperties",     g_api.BR_GetMediaSourceProperties);
+  LoadFn(rec, "BR_SetMediaSourceProperties",     g_api.BR_SetMediaSourceProperties);
+  LoadFn(rec, "CF_PCM_Source_SetSectionInfo",    g_api.CF_PCM_Source_SetSectionInfo);
 }
 
 }  // namespace

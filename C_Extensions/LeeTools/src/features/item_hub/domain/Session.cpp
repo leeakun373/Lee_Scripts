@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <vector>
 
 #include "plugin/PluginContext.h"
@@ -50,9 +51,17 @@ struct EnvCache {
   std::vector<EnvPoint> baseline;
 };
 
+struct PendingReverseApply {
+  void* item = nullptr;
+  void* take = nullptr;
+  bool want = false;
+};
+
 struct SessionData {
+  void* proj = nullptr;
   std::vector<ItemState> items;
   std::vector<EnvCache> envs;
+  std::vector<PendingReverseApply> pending_reverse;
   double relative[static_cast<int>(ParamId::Count)] = {};
   double envelope_vscale = 1.0;
   double envelope_voffset = 0.0;
@@ -61,11 +70,33 @@ struct SessionData {
   double item_gap = 0.0;
   double batch_trim = 1.0;
   int randomize_gen = 0;
+  bool envelopes_captured = false;
 };
 
 namespace {
 
 constexpr double kFineScale = 0.15;
+constexpr int kCmdToggleTakeReverse = 41051;
+
+bool deselect_all_items(void* proj, const lee::ApiTable& api) {
+  if (!proj || !api.CountMediaItems || !api.GetMediaItem || !api.SetMediaItemInfo_Value) {
+    return false;
+  }
+  const int n = api.CountMediaItems(proj);
+  for (int i = 0; i < n; ++i) {
+    void* it = api.GetMediaItem(proj, i);
+    if (it) api.SetMediaItemInfo_Value(it, "B_UISEL", 0.0);
+  }
+  return true;
+}
+
+void restore_hub_selection(SessionData& data, const lee::ApiTable& api) {
+  if (!data.proj || !api.SetMediaItemInfo_Value) return;
+  deselect_all_items(data.proj, api);
+  for (const ItemState& st : data.items) {
+    if (st.item) api.SetMediaItemInfo_Value(st.item, "B_UISEL", 1.0);
+  }
+}
 
 double db_from_lin(double v) {
   return v > 0.0 ? 20.0 * std::log10(v) : -150.0;
@@ -80,6 +111,67 @@ double clampd(double v, double lo, double hi) {
 }
 
 Session g_session;
+
+bool take_supports_reverse(void* take, const lee::ApiTable& api) {
+  if (!take || !api.GetMediaItemTake_Source || !api.GetMediaSourceType) return false;
+  void* src = api.GetMediaItemTake_Source(take);
+  if (!src) return false;
+  char type[64] = {};
+  api.GetMediaSourceType(src, type, sizeof(type));
+  return std::strcmp(type, "MIDI") != 0;
+}
+
+bool reverse_apis_available(const lee::ApiTable& api) {
+  return api.Main_OnCommand && api.SetMediaItemInfo_Value && api.CountMediaItems &&
+         api.GetMediaItem;
+}
+
+bool read_take_reverse(void* take, const lee::ApiTable& api) {
+  if (!take_supports_reverse(take, api)) return false;
+  if (!api.GetMediaItemTake_Source || !api.PCM_Source_GetSectionInfo) return false;
+
+  void* src = api.GetMediaItemTake_Source(take);
+  if (!src) return false;
+
+  char type[64] = {};
+  api.GetMediaSourceType(src, type, sizeof(type));
+  if (std::strcmp(type, "SECTION") != 0) return false;
+
+  double offs = 0.0;
+  double len = 0.0;
+  bool reverse = false;
+  if (api.PCM_Source_GetSectionInfo(src, &offs, &len, &reverse)) return reverse;
+  return false;
+}
+
+bool set_take_reverse_action(void* proj, void* take, void* item, bool want_reverse,
+                             const lee::ApiTable& api) {
+  if (!proj || !take || !item || !api.Main_OnCommand || !api.SetMediaItemInfo_Value) {
+    return false;
+  }
+  if (api.ValidatePtr2) {
+    if (!api.ValidatePtr2(proj, item, "MediaItem*")) return false;
+    if (!api.ValidatePtr2(proj, take, "MediaItem_Take*")) return false;
+  }
+  if (read_take_reverse(take, api) == want_reverse) return true;
+
+  if (api.PreventUIRefresh) api.PreventUIRefresh(1);
+  if (api.SetActiveTake) api.SetActiveTake(item, take);
+  if (!deselect_all_items(proj, api)) {
+    if (api.PreventUIRefresh) api.PreventUIRefresh(-1);
+    return false;
+  }
+  api.SetMediaItemInfo_Value(item, "B_UISEL", 1.0);
+  api.Main_OnCommand(kCmdToggleTakeReverse, 0);
+  if (api.PreventUIRefresh) api.PreventUIRefresh(-1);
+  return true;
+}
+
+bool set_take_reverse(void* proj, void* take, void* item, bool want_reverse,
+                      const lee::ApiTable& api) {
+  if (!take_supports_reverse(take, api)) return false;
+  return set_take_reverse_action(proj, take, item, want_reverse, api);
+}
 
 bool envelope_visible(const lee::ApiTable& api, void* env) {
   if (!env || !api.GetEnvelopeInfo_Value) return true;
@@ -114,11 +206,8 @@ void read_item(ItemState& st, void* /*proj*/, void* item, const lee::ApiTable& a
     st.item_vol_db = db_from_lin(api.GetMediaItemInfo_Value(item, "D_VOL"));
     st.fade_in_ms = api.GetMediaItemInfo_Value(item, "D_FADEINLEN") * 1000.0;
     st.fade_out_ms = api.GetMediaItemInfo_Value(item, "D_FADEOUTLEN") * 1000.0;
-    st.fade_in_shape = api.GetMediaItemInfo_Value(item, "I_FADEINSHAPE");
-    st.fade_out_shape = api.GetMediaItemInfo_Value(item, "I_FADEOUTSHAPE");
-    st.pan100 = api.GetMediaItemInfo_Value(item, "D_PAN") * 100.0;
-    st.reverse = api.GetMediaItemInfo_Value(item, "B_REVERSE");
-    st.channel = api.GetMediaItemInfo_Value(item, "I_CHANMODE");
+    st.fade_in_shape = api.GetMediaItemInfo_Value(item, "C_FADEINSHAPE");
+    st.fade_out_shape = api.GetMediaItemInfo_Value(item, "C_FADEOUTSHAPE");
     st.position = api.GetMediaItemInfo_Value(item, "D_POSITION");
     st.length = api.GetMediaItemInfo_Value(item, "D_LENGTH");
     st.snap_offset = api.GetMediaItemInfo_Value(item, "D_SNAPOFFSET");
@@ -129,6 +218,9 @@ void read_item(ItemState& st, void* /*proj*/, void* item, const lee::ApiTable& a
     st.rate = api.GetMediaItemTakeInfo_Value(st.take, "D_PLAYRATE");
     st.preserve = api.GetMediaItemTakeInfo_Value(st.take, "B_PPITCH");
     st.take_offset = api.GetMediaItemTakeInfo_Value(st.take, "D_STARTOFFS");
+    st.pan100 = api.GetMediaItemTakeInfo_Value(st.take, "D_PAN") * 100.0;
+    st.reverse = 0.0;
+    st.channel = api.GetMediaItemTakeInfo_Value(st.take, "I_CHANMODE");
   }
   st.rand_seed = static_cast<uint32_t>(std::rand()) | 1u;
 }
@@ -176,6 +268,21 @@ void refresh_position_displays(SessionData& data, bool multi, const lee::ApiTabl
   if (take && api.GetMediaItemTakeInfo_Value) {
     data.relative[static_cast<int>(ParamId::TakeOffset)] =
         api.GetMediaItemTakeInfo_Value(take, "D_STARTOFFS");
+  }
+}
+
+// REAPER resample-style rate change: keep the same source span while the item
+// block length scales inversely with play rate (like SWS resampled nudge).
+void apply_playrate_resampled(const ItemState& baseline, void* item, void* take, double new_rate,
+                              const lee::ApiTable& api) {
+  new_rate = clampd(new_rate, 0.1, 4.0);
+  const double old_rate = baseline.rate > 0.0 ? baseline.rate : 1.0;
+  const double new_len = std::max(0.001, baseline.length * old_rate / new_rate);
+  if (take && api.SetMediaItemTakeInfo_Value) {
+    api.SetMediaItemTakeInfo_Value(take, "D_PLAYRATE", new_rate);
+  }
+  if (item && api.SetMediaItemInfo_Value) {
+    api.SetMediaItemInfo_Value(item, "D_LENGTH", new_len);
   }
 }
 
@@ -244,7 +351,7 @@ void apply_to_items(SessionData& data, bool multi, ParamId id, const lee::ApiTab
         set_take("D_PITCH", rel(st.pitch));
         break;
       case ParamId::Rate:
-        set_take("D_PLAYRATE", clampd(slot, def.min_v, def.max_v));
+        apply_playrate_resampled(st, item, take, clampd(slot, def.min_v, def.max_v), api);
         break;
       case ParamId::PreservePitch:
         set_take("B_PPITCH", slot > 0.5 ? 1.0 : 0.0);
@@ -256,19 +363,24 @@ void apply_to_items(SessionData& data, bool multi, ParamId id, const lee::ApiTab
         set_item("D_FADEOUTLEN", rel(st.fade_out_ms) / 1000.0);
         break;
       case ParamId::FadeInShape:
-        set_item("I_FADEINSHAPE", std::round(slot));
+        set_item("C_FADEINSHAPE", std::round(slot));
         break;
       case ParamId::FadeOutShape:
-        set_item("I_FADEOUTSHAPE", std::round(slot));
+        set_item("C_FADEOUTSHAPE", std::round(slot));
         break;
       case ParamId::Pan:
-        set_item("D_PAN", clampd(rel(st.pan100), -100.0, 100.0) / 100.0);
+        set_take("D_PAN", clampd(rel(st.pan100), -100.0, 100.0) / 100.0);
         break;
-      case ParamId::Reverse:
-        set_item("B_REVERSE", slot > 0.5 ? 1.0 : 0.0);
+      case ParamId::Reverse: {
+        PendingReverseApply pending;
+        pending.item = item;
+        pending.take = take;
+        pending.want = slot > 0.5;
+        data.pending_reverse.push_back(pending);
         break;
+      }
       case ParamId::ChannelMode:
-        set_item("I_CHANMODE", std::round(slot));
+        set_take("I_CHANMODE", std::round(slot));
         break;
       case ParamId::LeftEdge: {
         const double trim = slot / 1000.0;
@@ -289,9 +401,11 @@ void apply_to_items(SessionData& data, bool multi, ParamId id, const lee::ApiTab
       case ParamId::PitchRand:
         set_take("D_PITCH", st.pitch + st.pitch_rand);
         break;
-      case ParamId::RateRand:
-        set_take("D_PLAYRATE", clampd(st.rate + st.rate_rand, 0.1, 4.0));
+      case ParamId::RateRand: {
+        const double new_rate = clampd(st.rate + st.rate_rand, 0.1, 4.0);
+        apply_playrate_resampled(st, item, take, new_rate, api);
         break;
+      }
       case ParamId::VolRand:
         set_take("D_VOL", lin_from_db(st.take_vol_db + st.vol_rand));
         break;
@@ -300,6 +414,7 @@ void apply_to_items(SessionData& data, bool multi, ParamId id, const lee::ApiTab
     }
   }
   if (id == ParamId::LeftEdge) refresh_position_displays(data, multi, api);
+  if (id == ParamId::Rate || id == ParamId::RateRand) refresh_position_displays(data, multi, api);
   if (CategoryOf(id) == Category::Envelope) apply_envelope_transform(data, api);
   if (api.UpdateArrange) api.UpdateArrange();
 }
@@ -317,6 +432,7 @@ bool Session::begin(void* proj) {
 
   data_ = new SessionData();
   proj_ = proj;
+  data_->proj = proj;
   capture_selection(proj);
   multi_ = data_->items.size() >= 2;
   if (data_->items.empty()) {
@@ -327,8 +443,7 @@ bool Session::begin(void* proj) {
 
   init_relative_slots(*data_, data_->items.front(), multi_);
 
-  if (api.Undo_BeginBlock2) api.Undo_BeginBlock2(proj);
-  undo_open_ = true;
+  undo_open_ = false;
   active_ = true;
   category_ = Category::GainPitch;
   return true;
@@ -338,6 +453,7 @@ void Session::capture_selection(void* proj) {
   const auto& api = lee::Api();
   data_->items.clear();
   data_->envs.clear();
+  data_->envelopes_captured = false;
   const int n = api.CountSelectedMediaItems(proj);
   for (int i = 0; i < n; ++i) {
     void* item = api.GetSelectedMediaItem(proj, i);
@@ -346,8 +462,24 @@ void Session::capture_selection(void* proj) {
     ItemState st;
     read_item(st, proj, item, api);
     data_->items.push_back(st);
+  }
+}
+
+void Session::ensure_envelopes_captured() {
+  if (!data_ || data_->envelopes_captured) return;
+  const auto& api = lee::Api();
+  data_->envs.clear();
+  for (const ItemState& st : data_->items) {
     if (st.take) capture_envelopes(api, st.take, data_->envs);
   }
+  data_->envelopes_captured = true;
+}
+
+void Session::ensure_undo() {
+  if (undo_open_ || !active_ || !proj_) return;
+  const auto& api = lee::Api();
+  if (api.Undo_BeginBlock2) api.Undo_BeginBlock2(proj_);
+  undo_open_ = true;
 }
 
 void Session::end() {
@@ -366,6 +498,7 @@ void Session::end() {
 void Session::set_category(Category c) {
   if (c >= Category::Count) return;
   category_ = c;
+  if (c == Category::Envelope) ensure_envelopes_captured();
 }
 
 void Session::next_category(int delta) {
@@ -378,6 +511,14 @@ void Session::next_category(int delta) {
 bool Session::param_enabled(ParamId id) const {
   if (!active_ || !data_) return false;
   if (Def(id).multi_only && !multi_) return false;
+  if (id == ParamId::Reverse) {
+    const lee::ApiTable& api = lee::Api();
+    if (!reverse_apis_available(api)) return false;
+    for (const ItemState& st : data_->items) {
+      if (take_supports_reverse(st.take, api)) return true;
+    }
+    return false;
+  }
   return true;
 }
 
@@ -447,12 +588,14 @@ double Session::normalized_value(ParamId id) const {
 
 void Session::adjust_param(ParamId id, double delta, bool fine) {
   if (!active_ || !data_ || !param_enabled(id)) return;
+  ensure_undo();
+  if (CategoryOf(id) == Category::Envelope) ensure_envelopes_captured();
   const ParamDef& def = Def(id);
   const double scale = fine ? kFineScale : 1.0;
   double& slot = data_->relative[static_cast<int>(id)];
 
   if (def.kind == ParamKind::Discrete) {
-    slot = clampd(slot + (delta > 0 ? 1.0 : -1.0), def.min_v, def.max_v);
+    slot = clampd(std::round(slot) + (delta > 0 ? 1.0 : -1.0), def.min_v, def.max_v);
   } else if (def.kind == ParamKind::Toggle) {
     slot = slot > 0.5 ? 0.0 : 1.0;
   } else {
@@ -480,8 +623,21 @@ void Session::adjust_param(ParamId id, double delta, bool fine) {
   }
 }
 
+void Session::wheel_param(ParamId id, double notches, bool fine) {
+  if (!active_ || !data_ || !param_enabled(id) || notches == 0.0) return;
+  const ParamDef& def = Def(id);
+  if (def.kind == ParamKind::Toggle) {
+    click_param(id);
+    return;
+  }
+  if (CategoryOf(id) == Category::Envelope) ensure_envelopes_captured();
+  // One wheel notch ≈ 10 px of horizontal drag.
+  adjust_param(id, notches * 10.0, fine);
+}
+
 void Session::reset_param(ParamId id) {
   if (!active_ || !data_) return;
+  ensure_undo();
   const ParamDef& def = Def(id);
   data_->relative[static_cast<int>(id)] = multi_ && !def.absolute_in_multi ? 0.0 : def.default_v;
   if (CategoryOf(id) == Category::Envelope) {
@@ -553,6 +709,17 @@ void Session::apply_batch_trim(double target_len) {
       api.SetMediaItemInfo_Value(st.item, "D_LENGTH", clampd(target_len, 0.001, 3600.0));
     }
   }
+  if (api.UpdateArrange) api.UpdateArrange();
+}
+
+void Session::flush_deferred_reverse_applies() {
+  if (!active_ || !data_ || data_->pending_reverse.empty()) return;
+  const auto& api = lee::Api();
+  for (const PendingReverseApply& pending : data_->pending_reverse) {
+    set_take_reverse(data_->proj, pending.take, pending.item, pending.want, api);
+  }
+  restore_hub_selection(*data_, api);
+  data_->pending_reverse.clear();
   if (api.UpdateArrange) api.UpdateArrange();
 }
 

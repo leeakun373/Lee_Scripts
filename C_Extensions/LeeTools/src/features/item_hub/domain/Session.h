@@ -22,14 +22,18 @@ class Session {
   double normalized_value(ParamId id) const;
 
   void adjust_param(ParamId id, double delta, bool fine);
+  void wheel_param(ParamId id, double notches, bool fine);
   void reset_param(ParamId id);
   void click_param(ParamId id);
   void on_param_drag_start(ParamId id);
 
   void tick(bool window_focused);
+  void flush_deferred_reverse_applies();
 
  private:
   void capture_selection(void* proj);
+  void ensure_envelopes_captured();
+  void ensure_undo();
   void apply_randomize(ParamId id);
   void apply_item_gap();
   void apply_batch_trim(double target_len);
