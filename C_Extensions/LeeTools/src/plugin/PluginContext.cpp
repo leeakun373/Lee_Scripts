@@ -79,6 +79,32 @@ void LoadApiTable(reaper_plugin_info_t* rec) {
   LoadFn(rec, "BR_GetMediaSourceProperties",     g_api.BR_GetMediaSourceProperties);
   LoadFn(rec, "BR_SetMediaSourceProperties",     g_api.BR_SetMediaSourceProperties);
   LoadFn(rec, "CF_PCM_Source_SetSectionInfo",    g_api.CF_PCM_Source_SetSectionInfo);
+
+  LoadFn(rec, "CreateTakeAudioAccessor",         g_api.CreateTakeAudioAccessor);
+  LoadFn(rec, "DestroyAudioAccessor",            g_api.DestroyAudioAccessor);
+  LoadFn(rec, "GetAudioAccessorSamples",         g_api.GetAudioAccessorSamples);
+  LoadFn(rec, "GetAudioAccessorStartTime",       g_api.GetAudioAccessorStartTime);
+  LoadFn(rec, "GetAudioAccessorEndTime",         g_api.GetAudioAccessorEndTime);
+  LoadFn(rec, "GetMediaSourceSampleRate",        g_api.GetMediaSourceSampleRate);
+  LoadFn(rec, "GetMediaSourceNumChannels",       g_api.GetMediaSourceNumChannels);
+  LoadFn(rec, "TakeIsMIDI",                      g_api.TakeIsMIDI);
+
+  LoadFn(rec, "CountTracks",                     g_api.CountTracks);
+  LoadFn(rec, "GetTrack",                        g_api.GetTrack);
+  LoadFn(rec, "InsertTrackAtIndex",              g_api.InsertTrackAtIndex);
+  LoadFn(rec, "TrackList_AdjustWindows",         g_api.TrackList_AdjustWindows);
+  LoadFn(rec, "GetMediaTrackInfo_Value",         g_api.GetMediaTrackInfo_Value);
+  LoadFn(rec, "GetSetMediaTrackInfo_String",     g_api.GetSetMediaTrackInfo_String);
+  LoadFn(rec, "AddMediaItemToTrack",             g_api.AddMediaItemToTrack);
+  LoadFn(rec, "AddTakeToMediaItem",              g_api.AddTakeToMediaItem);
+  LoadFn(rec, "SetMediaItemTake_Source",         g_api.SetMediaItemTake_Source);
+  LoadFn(rec, "PCM_Source_CreateFromFile",       g_api.PCM_Source_CreateFromFile);
+  LoadFn(rec, "PCM_Source_BuildPeaks",          g_api.PCM_Source_BuildPeaks);
+  LoadFn(rec, "UpdateItemInProject",             g_api.UpdateItemInProject);
+
+  LoadFn(rec, "PlayPreview",                     g_api.PlayPreview);
+  LoadFn(rec, "StopPreview",                     g_api.StopPreview);
+  LoadFn(rec, "PlayTrackPreview2",               g_api.PlayTrackPreview2);
 }
 
 }  // namespace

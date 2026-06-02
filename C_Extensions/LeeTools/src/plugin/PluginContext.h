@@ -122,6 +122,37 @@ struct ApiTable {
                                       double fade, bool reverse) = nullptr;
   bool (*CF_PCM_Source_SetSectionInfo)(void* section, void* source, double offset, double length,
                                        bool reverse, double* fadeInOptional) = nullptr;
+
+  // Splitter: audio reading.
+  void* (*CreateTakeAudioAccessor)(void* take) = nullptr;
+  void (*DestroyAudioAccessor)(void* accessor) = nullptr;
+  int (*GetAudioAccessorSamples)(void* accessor, int samplerate, int numchannels,
+                                 double starttime_sec, int numsamplesperchannel,
+                                 double* samplebuffer) = nullptr;
+  double (*GetAudioAccessorStartTime)(void* accessor) = nullptr;
+  double (*GetAudioAccessorEndTime)(void* accessor) = nullptr;
+  int (*GetMediaSourceSampleRate)(void* source) = nullptr;
+  int (*GetMediaSourceNumChannels)(void* source) = nullptr;
+  bool (*TakeIsMIDI)(void* take) = nullptr;
+
+  // Splitter: track / item creation.
+  int (*CountTracks)(void* proj) = nullptr;
+  void* (*GetTrack)(void* proj, int idx) = nullptr;
+  void (*InsertTrackAtIndex)(int idx, bool wantDefaults) = nullptr;
+  void (*TrackList_AdjustWindows)(bool isMinor) = nullptr;
+  double (*GetMediaTrackInfo_Value)(void* tr, const char* parmname) = nullptr;
+  bool (*GetSetMediaTrackInfo_String)(void* tr, const char* parmname, char* str, bool set) = nullptr;
+  void* (*AddMediaItemToTrack)(void* tr) = nullptr;
+  void* (*AddTakeToMediaItem)(void* item) = nullptr;
+  bool (*SetMediaItemTake_Source)(void* take, void* source) = nullptr;
+  void* (*PCM_Source_CreateFromFile)(const char* fn) = nullptr;
+  int (*PCM_Source_BuildPeaks)(void* src, int mode) = nullptr;
+  void (*UpdateItemInProject)(void* item) = nullptr;
+
+  // Splitter: preview (preview_register_t* passed as void*).
+  int (*PlayPreview)(void* preview) = nullptr;
+  int (*StopPreview)(void* preview) = nullptr;
+  int (*PlayTrackPreview2)(void* proj, void* preview) = nullptr;
 };
 
 // Returns the cached function pointer table. Always non-null; individual

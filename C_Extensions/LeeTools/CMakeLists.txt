@@ -34,6 +34,30 @@ add_library(reaper_lee_tools SHARED
   src/features/item_hub/domain/ParamSpec.cpp
   src/features/item_hub/domain/Session.cpp
   src/features/item_hub/ui/HubWindow.cpp
+
+  # shared/dsp
+  src/shared/dsp/Fft.cpp
+  src/shared/dsp/Stft.cpp
+  src/shared/dsp/Median.cpp
+  src/shared/dsp/Envelope.cpp
+
+  # features/splitter
+  src/features/splitter/Register.cpp
+  src/features/splitter/domain/Prefs.cpp
+  src/features/splitter/domain/ItemSnapshot.cpp
+  src/features/splitter/domain/AudioReader.cpp
+  src/features/splitter/domain/Selection.cpp
+  src/features/splitter/domain/SplitEngine.cpp
+  src/features/splitter/domain/WavWriter.cpp
+  src/features/splitter/domain/TrackWriter.cpp
+  src/features/splitter/domain/BatchJob.cpp
+  src/features/splitter/domain/PreviewPlayer.cpp
+  src/features/splitter/domain/algorithms/TransientSustain.cpp
+  src/features/splitter/domain/algorithms/MidSide.cpp
+  src/features/splitter/domain/algorithms/Hpss.cpp
+  src/features/splitter/domain/algorithms/TonalNoise.cpp
+  src/features/splitter/domain/algorithms/FgAmbient.cpp
+  src/features/splitter/ui/SplitterWindow.cpp
 )
 
 target_include_directories(reaper_lee_tools SYSTEM PRIVATE
