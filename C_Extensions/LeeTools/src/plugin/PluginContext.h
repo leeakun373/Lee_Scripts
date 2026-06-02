@@ -83,13 +83,25 @@ struct ApiTable {
   void* (*GetMediaItemTrack)(void* item) = nullptr;
   int (*CountTakeEnvelopes)(void* take) = nullptr;
   void* (*GetTakeEnvelope)(void* take, int idx) = nullptr;
+  void* (*GetTakeEnvelopeByName)(void* take, const char* envname) = nullptr;
   double (*GetEnvelopeInfo_Value)(void* envelope, const char* parmname) = nullptr;
   bool (*SetEnvelopeInfo_Value)(void* envelope, const char* parmname, double value) = nullptr;
+  int (*CountAutomationItems)(void* envelope) = nullptr;
   int (*CountEnvelopePoints)(void* envelope) = nullptr;
+  int (*CountEnvelopePointsEx)(void* envelope, int autoitem_idx) = nullptr;
   bool (*GetEnvelopePoint)(void* envelope, int ptidx, double* timeOut, double* valueOut,
-                           int* shapeOut, int* tensionOut, bool* selectedOut) = nullptr;
-  bool (*SetEnvelopePoint)(void* envelope, int ptidx, double time, double value, int shape,
-                           int tension, bool selected) = nullptr;
+                           int* shapeOut, double* tensionOut, bool* selectedOut) = nullptr;
+  bool (*GetEnvelopePointEx)(void* envelope, int autoitem_idx, int ptidx, double* timeOut,
+                             double* valueOut, int* shapeOut, double* tensionOut,
+                             bool* selectedOut) = nullptr;
+  bool (*SetEnvelopePoint)(void* envelope, int ptidx, double* timeInOptional,
+                           double* valueInOptional, int* shapeInOptional,
+                           double* tensionInOptional, bool* selectedInOptional,
+                           bool* noSortInOptional) = nullptr;
+  bool (*SetEnvelopePointEx)(void* envelope, int autoitem_idx, int ptidx,
+                             double* timeInOptional, double* valueInOptional,
+                             int* shapeInOptional, double* tensionInOptional,
+                             bool* selectedInOptional, bool* noSortInOptional) = nullptr;
   bool (*InsertEnvelopePoint)(void* envelope, double time, double value, int shape, int tension,
                               bool selected, bool* noSortInOut) = nullptr;
   int (*GetEnvelopeScalingMode)(void* envelope) = nullptr;

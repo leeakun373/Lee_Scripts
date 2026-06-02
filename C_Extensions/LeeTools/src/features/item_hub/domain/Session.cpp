@@ -42,12 +42,13 @@ struct EnvPoint {
   double time = 0.0;
   double value = 0.0;
   int shape = 0;
-  int tension = 0;
+  double tension = 0.0;
   bool selected = false;
 };
 
 struct EnvCache {
   void* envelope = nullptr;
+  int autoitem_idx = -1;
   std::vector<EnvPoint> baseline;
 };
 
@@ -77,6 +78,7 @@ namespace {
 
 constexpr double kFineScale = 0.15;
 constexpr int kCmdToggleTakeReverse = 41051;
+constexpr double kMaxPositionSeconds = 30.0;
 
 bool deselect_all_items(void* proj, const lee::ApiTable& api) {
   if (!proj || !api.CountMediaItems || !api.GetMediaItem || !api.SetMediaItemInfo_Value) {
@@ -108,6 +110,78 @@ double lin_from_db(double db) {
 
 double clampd(double v, double lo, double hi) {
   return std::max(lo, std::min(hi, v));
+}
+
+double item_target_rate(const SessionData& data, const ItemState& st) {
+  if (std::abs(st.rate_rand) > 1e-9) {
+    return clampd(st.rate + st.rate_rand, 0.1, 4.0);
+  }
+  return clampd(data.relative[static_cast<int>(ParamId::Rate)], 0.1, 4.0);
+}
+
+double item_timeline_length(const ItemState& st, double target_rate) {
+  const double base_rate = st.rate > 0.0 ? st.rate : 1.0;
+  return std::max(0.001, st.length * base_rate / target_rate);
+}
+
+double item_intended_length(const SessionData& data, const ItemState& st, bool multi) {
+  const ParamDef& right_def = Def(ParamId::RightEdge);
+  const double right_slot = data.relative[static_cast<int>(ParamId::RightEdge)];
+  const double rate_len = item_timeline_length(st, item_target_rate(data, st));
+
+  if (multi) {
+    return clampd(rate_len + right_slot, right_def.min_v, right_def.max_v);
+  }
+  return clampd(right_slot, right_def.min_v, right_def.max_v);
+}
+
+void apply_left_edge_item(const SessionData& data, const ItemState& st, void* item, void* take,
+                          double trim_s, bool multi, const lee::ApiTable& api) {
+  if (!item || !api.SetMediaItemInfo_Value) return;
+  const double target_rate = item_target_rate(data, st);
+  const double intended_len = item_intended_length(data, st, multi);
+  trim_s = clampd(trim_s, 0.0, std::max(0.0, intended_len - 0.001));
+
+  if (take && api.SetMediaItemTakeInfo_Value) {
+    api.SetMediaItemTakeInfo_Value(take, "D_STARTOFFS", st.take_offset + trim_s * target_rate);
+  }
+  api.SetMediaItemInfo_Value(item, "D_LENGTH", std::max(0.001, intended_len - trim_s));
+  api.SetMediaItemInfo_Value(item, "D_POSITION", st.position + trim_s);
+  if (st.snap_offset > 0.0) {
+    api.SetMediaItemInfo_Value(item, "D_SNAPOFFSET", st.snap_offset + trim_s);
+  }
+}
+
+void param_limits(const SessionData& data, bool multi, ParamId id, double& min_v, double& max_v) {
+  const ParamDef& def = Def(id);
+  min_v = def.min_v;
+  max_v = def.max_v;
+
+  switch (id) {
+    case ParamId::LeftEdge: {
+      if (data.items.empty()) break;
+      max_v = kMaxPositionSeconds;
+      for (const ItemState& st : data.items) {
+        const double intended = item_intended_length(data, st, multi);
+        max_v = std::min(max_v, std::max(0.0, intended - 0.001));
+      }
+      break;
+    }
+    case ParamId::SnapOffset: {
+      if (data.items.empty()) break;
+      double cap = kMaxPositionSeconds;
+      for (const ItemState& st : data.items) {
+        cap = std::min(cap, std::max(0.001, st.length));
+      }
+      if (multi) {
+        min_v = -cap;
+      }
+      max_v = cap;
+      break;
+    }
+    default:
+      break;
+  }
 }
 
 Session g_session;
@@ -178,25 +252,85 @@ bool envelope_visible(const lee::ApiTable& api, void* env) {
   return api.GetEnvelopeInfo_Value(env, "B_SHOW") > 0.5;
 }
 
-void capture_envelopes(const lee::ApiTable& api, void* take, std::vector<EnvCache>& out) {
-  if (!take || !api.CountTakeEnvelopes || !api.GetTakeEnvelope || !api.CountEnvelopePoints ||
-      !api.GetEnvelopePoint) {
-    return;
+int count_envelope_lane_points(const lee::ApiTable& api, void* env, int autoitem_idx) {
+  if (!env) return 0;
+  if (api.CountEnvelopePointsEx) return api.CountEnvelopePointsEx(env, autoitem_idx);
+  if (autoitem_idx < 0 && api.CountEnvelopePoints) return api.CountEnvelopePoints(env);
+  return 0;
+}
+
+void capture_envelope_lane(const lee::ApiTable& api, void* env, int autoitem_idx,
+                           std::vector<EnvCache>& out) {
+  const int pc = count_envelope_lane_points(api, env, autoitem_idx);
+  if (pc <= 0) return;
+
+  EnvCache cache;
+  cache.envelope = env;
+  cache.autoitem_idx = autoitem_idx;
+  cache.baseline.reserve(static_cast<size_t>(pc));
+  for (int p = 0; p < pc; ++p) {
+    EnvPoint pt;
+    bool ok = false;
+    if (api.GetEnvelopePointEx) {
+      ok = api.GetEnvelopePointEx(env, autoitem_idx, p, &pt.time, &pt.value, &pt.shape,
+                                  &pt.tension, &pt.selected);
+    } else if (autoitem_idx < 0 && api.GetEnvelopePoint) {
+      ok = api.GetEnvelopePoint(env, p, &pt.time, &pt.value, &pt.shape, &pt.tension,
+                                &pt.selected);
+    }
+    if (ok) cache.baseline.push_back(pt);
   }
+  if (!cache.baseline.empty()) out.push_back(std::move(cache));
+}
+
+void capture_take_envelope(const lee::ApiTable& api, void* env, std::vector<EnvCache>& out,
+                           int& auto_items_out, int& lanes_out) {
+  if (!env) return;
+  const size_t before = out.size();
+  capture_envelope_lane(api, env, -1, out);
+  auto_items_out = 0;
+  if (api.CountAutomationItems) {
+    auto_items_out = api.CountAutomationItems(env);
+    for (int ai = 0; ai < auto_items_out; ++ai) {
+      capture_envelope_lane(api, env, ai, out);
+    }
+  }
+  lanes_out = static_cast<int>(out.size() - before);
+}
+
+void capture_envelopes(const lee::ApiTable& api, void* take, std::vector<EnvCache>& out) {
+  if (!take || !api.CountTakeEnvelopes || !api.GetTakeEnvelope) return;
+  if (!api.GetEnvelopePoint && !api.GetEnvelopePointEx) return;
+
+  std::vector<void*> processed;
+  auto already_processed = [&](void* env) {
+    for (void* e : processed) {
+      if (e == env) return true;
+    }
+    return false;
+  };
+  auto process_env = [&](void* env) {
+    if (!env || already_processed(env)) return;
+    processed.push_back(env);
+    int auto_items = 0;
+    int lanes = 0;
+    capture_take_envelope(api, env, out, auto_items, lanes);
+    (void)auto_items;
+    (void)lanes;
+  };
+
+  static const char* kTakeEnvNames[] = {"Volume", "Pan", "Pitch", "Mute"};
+  if (api.GetTakeEnvelopeByName) {
+    for (const char* name : kTakeEnvNames) {
+      process_env(api.GetTakeEnvelopeByName(take, name));
+    }
+  }
+
   const int n = api.CountTakeEnvelopes(take);
   for (int i = 0; i < n; ++i) {
-    void* env = api.GetTakeEnvelope(take, i);
-    if (!env || !envelope_visible(api, env)) continue;
-    EnvCache cache;
-    cache.envelope = env;
-    const int pc = api.CountEnvelopePoints(env);
-    for (int p = 0; p < pc; ++p) {
-      EnvPoint pt;
-      api.GetEnvelopePoint(env, p, &pt.time, &pt.value, &pt.shape, &pt.tension, &pt.selected);
-      cache.baseline.push_back(pt);
-    }
-    if (!cache.baseline.empty()) out.push_back(std::move(cache));
+    process_env(api.GetTakeEnvelope(take, i));
   }
+
 }
 
 void read_item(ItemState& st, void* /*proj*/, void* item, const lee::ApiTable& api) {
@@ -219,7 +353,7 @@ void read_item(ItemState& st, void* /*proj*/, void* item, const lee::ApiTable& a
     st.preserve = api.GetMediaItemTakeInfo_Value(st.take, "B_PPITCH");
     st.take_offset = api.GetMediaItemTakeInfo_Value(st.take, "D_STARTOFFS");
     st.pan100 = api.GetMediaItemTakeInfo_Value(st.take, "D_PAN") * 100.0;
-    st.reverse = 0.0;
+    st.reverse = read_take_reverse(st.take, api) ? 1.0 : 0.0;
     st.channel = api.GetMediaItemTakeInfo_Value(st.take, "I_CHANMODE");
   }
   st.rand_seed = static_cast<uint32_t>(std::rand()) | 1u;
@@ -258,12 +392,17 @@ void init_relative_slots(SessionData& data, const ItemState& ref, bool multi) {
   data.relative[static_cast<int>(ParamId::VolRand)] = 0.0;
 }
 
-void refresh_position_displays(SessionData& data, bool multi, const lee::ApiTable& api) {
+void refresh_position_displays(SessionData& data, bool multi, const lee::ApiTable& api,
+                               bool sync_right_edge = true) {
   if (multi || data.items.empty()) return;
   void* item = data.items.front().item;
   if (!item || !api.GetMediaItemInfo_Value) return;
-  data.relative[static_cast<int>(ParamId::RightEdge)] =
-      api.GetMediaItemInfo_Value(item, "D_LENGTH");
+  if (sync_right_edge) {
+    data.relative[static_cast<int>(ParamId::RightEdge)] =
+        api.GetMediaItemInfo_Value(item, "D_LENGTH");
+  }
+  data.relative[static_cast<int>(ParamId::SnapOffset)] =
+      api.GetMediaItemInfo_Value(item, "D_SNAPOFFSET");
   void* take = data.items.front().take;
   if (take && api.GetMediaItemTakeInfo_Value) {
     data.relative[static_cast<int>(ParamId::TakeOffset)] =
@@ -271,8 +410,6 @@ void refresh_position_displays(SessionData& data, bool multi, const lee::ApiTabl
   }
 }
 
-// REAPER resample-style rate change: keep the same source span while the item
-// block length scales inversely with play rate (like SWS resampled nudge).
 void apply_playrate_resampled(const ItemState& baseline, void* item, void* take, double new_rate,
                               const lee::ApiTable& api) {
   new_rate = clampd(new_rate, 0.1, 4.0);
@@ -286,8 +423,34 @@ void apply_playrate_resampled(const ItemState& baseline, void* item, void* take,
   }
 }
 
+void apply_rate_with_geometry(SessionData& data, ItemState& st, void* item, void* take,
+                              double new_rate, bool multi, const lee::ApiTable& api) {
+  apply_playrate_resampled(st, item, take, new_rate, api);
+  if (!multi) {
+    data.relative[static_cast<int>(ParamId::RightEdge)] = item_timeline_length(st, new_rate);
+  }
+  apply_left_edge_item(data, st, item, take, data.relative[static_cast<int>(ParamId::LeftEdge)],
+                       multi, api);
+}
+
+void write_envelope_lane_point(const lee::ApiTable& api, const EnvCache& cache, int ptidx,
+                               const EnvPoint& pt) {
+  double time = pt.time;
+  double value = pt.value;
+  double tension = pt.tension;
+  int shape = pt.shape;
+  bool selected = pt.selected;
+  if (cache.autoitem_idx >= 0 && api.SetEnvelopePointEx) {
+    api.SetEnvelopePointEx(cache.envelope, cache.autoitem_idx, ptidx, &time, &value, &shape,
+                           &tension, &selected, nullptr);
+  } else if (api.SetEnvelopePoint) {
+    api.SetEnvelopePoint(cache.envelope, ptidx, &time, &value, &shape, &tension, &selected,
+                         nullptr);
+  }
+}
+
 void apply_envelope_transform(SessionData& data, const lee::ApiTable& api) {
-  if (!api.SetEnvelopePoint) return;
+  if (!api.SetEnvelopePoint && !api.SetEnvelopePointEx) return;
   for (const EnvCache& cache : data.envs) {
     if (!cache.envelope || cache.baseline.empty()) continue;
     std::vector<EnvPoint> pts = cache.baseline;
@@ -314,10 +477,10 @@ void apply_envelope_transform(SessionData& data, const lee::ApiTable& api) {
       }
       pts.swap(sm);
     }
-    const int n = std::min(api.CountEnvelopePoints(cache.envelope), static_cast<int>(pts.size()));
+    const int n = std::min(count_envelope_lane_points(api, cache.envelope, cache.autoitem_idx),
+                           static_cast<int>(pts.size()));
     for (int p = 0; p < n; ++p) {
-      const EnvPoint& pt = pts[static_cast<size_t>(p)];
-      api.SetEnvelopePoint(cache.envelope, p, pt.time, pt.value, pt.shape, pt.tension, pt.selected);
+      write_envelope_lane_point(api, cache, p, pts[static_cast<size_t>(p)]);
     }
   }
 }
@@ -350,9 +513,11 @@ void apply_to_items(SessionData& data, bool multi, ParamId id, const lee::ApiTab
       case ParamId::Pitch:
         set_take("D_PITCH", rel(st.pitch));
         break;
-      case ParamId::Rate:
-        apply_playrate_resampled(st, item, take, clampd(slot, def.min_v, def.max_v), api);
+      case ParamId::Rate: {
+        const double new_rate = clampd(slot, def.min_v, def.max_v);
+        apply_rate_with_geometry(data, st, item, take, new_rate, multi, api);
         break;
+      }
       case ParamId::PreservePitch:
         set_take("B_PPITCH", slot > 0.5 ? 1.0 : 0.0);
         break;
@@ -382,13 +547,9 @@ void apply_to_items(SessionData& data, bool multi, ParamId id, const lee::ApiTab
       case ParamId::ChannelMode:
         set_take("I_CHANMODE", std::round(slot));
         break;
-      case ParamId::LeftEdge: {
-        const double trim = slot / 1000.0;
-        set_take("D_STARTOFFS", st.take_offset + trim);
-        set_item("D_LENGTH", std::max(0.001, st.length - trim));
-        set_item("D_POSITION", st.position + trim);
+      case ParamId::LeftEdge:
+        apply_left_edge_item(data, st, item, take, slot, multi, api);
         break;
-      }
       case ParamId::RightEdge:
         set_item("D_LENGTH", clampd(rel(st.length), def.min_v, def.max_v));
         break;
@@ -396,14 +557,14 @@ void apply_to_items(SessionData& data, bool multi, ParamId id, const lee::ApiTab
         set_take("D_STARTOFFS", rel(st.take_offset));
         break;
       case ParamId::SnapOffset:
-        set_item("D_SNAPOFFSET", rel(st.snap_offset));
+        set_item("D_SNAPOFFSET", clampd(rel(st.snap_offset), 0.0, st.length));
         break;
       case ParamId::PitchRand:
         set_take("D_PITCH", st.pitch + st.pitch_rand);
         break;
       case ParamId::RateRand: {
         const double new_rate = clampd(st.rate + st.rate_rand, 0.1, 4.0);
-        apply_playrate_resampled(st, item, take, new_rate, api);
+        apply_rate_with_geometry(data, st, item, take, new_rate, multi, api);
         break;
       }
       case ParamId::VolRand:
@@ -413,10 +574,25 @@ void apply_to_items(SessionData& data, bool multi, ParamId id, const lee::ApiTab
         break;
     }
   }
-  if (id == ParamId::LeftEdge) refresh_position_displays(data, multi, api);
-  if (id == ParamId::Rate || id == ParamId::RateRand) refresh_position_displays(data, multi, api);
+  if (id == ParamId::LeftEdge) refresh_position_displays(data, multi, api, false);
+  if (id == ParamId::Rate || id == ParamId::RateRand) refresh_position_displays(data, multi, api, true);
   if (CategoryOf(id) == Category::Envelope) apply_envelope_transform(data, api);
   if (api.UpdateArrange) api.UpdateArrange();
+}
+
+double wheel_value_step(ParamId id) {
+  switch (id) {
+    case ParamId::ItemVol:
+    case ParamId::TakeVol:
+      return 1.0;
+    case ParamId::Rate:
+      return 0.1;
+    case ParamId::LeftEdge:
+    case ParamId::RightEdge:
+      return 0.01;
+    default:
+      return 0.0;
+  }
 }
 
 }  // namespace
@@ -466,7 +642,8 @@ void Session::capture_selection(void* proj) {
 }
 
 void Session::ensure_envelopes_captured() {
-  if (!data_ || data_->envelopes_captured) return;
+  if (!data_) return;
+  if (data_->envelopes_captured && !data_->envs.empty()) return;
   const auto& api = lee::Api();
   data_->envs.clear();
   for (const ItemState& st : data_->items) {
@@ -506,6 +683,7 @@ void Session::next_category(int delta) {
   while (c < 0) c += static_cast<int>(Category::Count);
   c %= static_cast<int>(Category::Count);
   category_ = static_cast<Category>(c);
+  if (category_ == Category::Envelope) ensure_envelopes_captured();
 }
 
 bool Session::param_enabled(ParamId id) const {
@@ -545,9 +723,13 @@ void Session::format_value(ParamId id, char* buf, size_t buf_size) const {
   if (multi_ && !def.absolute_in_multi) {
     if (id == ParamId::Pitch) std::snprintf(buf, buf_size, "%+.1f st", v);
     else if (id == ParamId::Pan) std::snprintf(buf, buf_size, "%+.0f", v);
-    else if (id == ParamId::FadeIn || id == ParamId::FadeOut || id == ParamId::LeftEdge)
+    else if (id == ParamId::FadeIn || id == ParamId::FadeOut)
       std::snprintf(buf, buf_size, "%+.0f ms", v);
-    else if (id == ParamId::Rate) std::snprintf(buf, buf_size, "%.4fx", v);
+    else if (id == ParamId::LeftEdge || id == ParamId::RightEdge || id == ParamId::ItemGap)
+      std::snprintf(buf, buf_size, "%+.3f s", v);
+    else if (id == ParamId::TakeOffset || id == ParamId::SnapOffset)
+      std::snprintf(buf, buf_size, "%+.3f s", v);
+    else if (id == ParamId::Rate || id == ParamId::RateRand) std::snprintf(buf, buf_size, "%.4fx", v);
     else std::snprintf(buf, buf_size, "%+.2f dB", v);
     return;
   }
@@ -560,11 +742,19 @@ void Session::format_value(ParamId id, char* buf, size_t buf_size) const {
     std::snprintf(buf, buf_size, "%.4fx", v);
     return;
   }
-  if (id == ParamId::FadeIn || id == ParamId::FadeOut || id == ParamId::LeftEdge) {
+  if (id == ParamId::RateRand) {
+    std::snprintf(buf, buf_size, "%.2f x", v);
+    return;
+  }
+  if (id == ParamId::FadeIn || id == ParamId::FadeOut) {
     std::snprintf(buf, buf_size, "%.0f ms", v);
     return;
   }
-  if (id == ParamId::RightEdge || id == ParamId::BatchTrim) {
+  if (id == ParamId::LeftEdge || id == ParamId::RightEdge || id == ParamId::BatchTrim) {
+    std::snprintf(buf, buf_size, "%.3f s", v);
+    return;
+  }
+  if (id == ParamId::TakeOffset || id == ParamId::SnapOffset || id == ParamId::ItemGap) {
     std::snprintf(buf, buf_size, "%.3f s", v);
     return;
   }
@@ -583,7 +773,10 @@ double Session::normalized_value(ParamId id) const {
   if (!active_ || !data_) return 0.0;
   const ParamDef& def = Def(id);
   const double v = data_->relative[static_cast<int>(id)];
-  return (v - def.min_v) / std::max(1e-9, def.max_v - def.min_v);
+  double min_v = def.min_v;
+  double max_v = def.max_v;
+  param_limits(*data_, multi_, id, min_v, max_v);
+  return (v - min_v) / std::max(1e-9, max_v - min_v);
 }
 
 void Session::adjust_param(ParamId id, double delta, bool fine) {
@@ -599,7 +792,10 @@ void Session::adjust_param(ParamId id, double delta, bool fine) {
   } else if (def.kind == ParamKind::Toggle) {
     slot = slot > 0.5 ? 0.0 : 1.0;
   } else {
-    slot = clampd(slot + delta * (def.max_v - def.min_v) * 0.0025 * scale, def.min_v, def.max_v);
+    double min_v = def.min_v;
+    double max_v = def.max_v;
+    param_limits(*data_, multi_, id, min_v, max_v);
+    slot = clampd(slot + delta * (max_v - min_v) * 0.0025 * scale, min_v, max_v);
   }
 
   if (CategoryOf(id) == Category::Envelope) {
@@ -631,6 +827,29 @@ void Session::wheel_param(ParamId id, double notches, bool fine) {
     return;
   }
   if (CategoryOf(id) == Category::Envelope) ensure_envelopes_captured();
+
+  const double step = wheel_value_step(id);
+  if (step > 0.0) {
+    ensure_undo();
+    const double scale = fine ? kFineScale : 1.0;
+    double min_v = def.min_v;
+    double max_v = def.max_v;
+    param_limits(*data_, multi_, id, min_v, max_v);
+    double& slot = data_->relative[static_cast<int>(id)];
+    slot = clampd(slot + notches * step * scale, min_v, max_v);
+    if (CategoryOf(id) == Category::Envelope) {
+      switch (id) {
+        case ParamId::VScale: data_->envelope_vscale = slot; break;
+        case ParamId::VOffset: data_->envelope_voffset = slot; break;
+        case ParamId::TScale: data_->envelope_tscale = slot; break;
+        case ParamId::Smooth: data_->envelope_smooth = slot; break;
+        default: break;
+      }
+    }
+    apply_to_items(*data_, multi_, id, lee::Api());
+    return;
+  }
+
   // One wheel notch ≈ 10 px of horizontal drag.
   adjust_param(id, notches * 10.0, fine);
 }
@@ -641,6 +860,7 @@ void Session::reset_param(ParamId id) {
   const ParamDef& def = Def(id);
   data_->relative[static_cast<int>(id)] = multi_ && !def.absolute_in_multi ? 0.0 : def.default_v;
   if (CategoryOf(id) == Category::Envelope) {
+    ensure_envelopes_captured();
     data_->envelope_vscale = 1.0;
     data_->envelope_voffset = 0.0;
     data_->envelope_tscale = 1.0;

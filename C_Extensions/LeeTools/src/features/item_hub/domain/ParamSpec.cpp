@@ -13,7 +13,7 @@ constexpr ParamDef kDefs[] = {
     {ParamId::Rate, Category::GainPitch, ParamKind::Continuous, "Rate", 0.1, 4.0, 1.0, true, false,
      0},
     {ParamId::PreservePitch, Category::GainPitch, ParamKind::Toggle, "Preserve Pitch", 0.0, 1.0,
-     1.0, true, false, 0},
+     0.0, true, false, 0},
     {ParamId::FadeIn, Category::FadePan, ParamKind::Continuous, "Fade In", 0.0, 5000.0, 0.0, false,
      false, 0},
     {ParamId::FadeOut, Category::FadePan, ParamKind::Continuous, "Fade Out", 0.0, 5000.0, 0.0,

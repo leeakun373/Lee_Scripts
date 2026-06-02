@@ -57,11 +57,16 @@ void LoadApiTable(reaper_plugin_info_t* rec) {
   LoadFn(rec, "GetMediaItemTrack",               g_api.GetMediaItemTrack);
   LoadFn(rec, "CountTakeEnvelopes",              g_api.CountTakeEnvelopes);
   LoadFn(rec, "GetTakeEnvelope",                 g_api.GetTakeEnvelope);
+  LoadFn(rec, "GetTakeEnvelopeByName",           g_api.GetTakeEnvelopeByName);
   LoadFn(rec, "GetEnvelopeInfo_Value",           g_api.GetEnvelopeInfo_Value);
   LoadFn(rec, "SetEnvelopeInfo_Value",           g_api.SetEnvelopeInfo_Value);
+  LoadFn(rec, "CountAutomationItems",            g_api.CountAutomationItems);
   LoadFn(rec, "CountEnvelopePoints",             g_api.CountEnvelopePoints);
+  LoadFn(rec, "CountEnvelopePointsEx",           g_api.CountEnvelopePointsEx);
   LoadFn(rec, "GetEnvelopePoint",               g_api.GetEnvelopePoint);
+  LoadFn(rec, "GetEnvelopePointEx",             g_api.GetEnvelopePointEx);
   LoadFn(rec, "SetEnvelopePoint",                g_api.SetEnvelopePoint);
+  LoadFn(rec, "SetEnvelopePointEx",              g_api.SetEnvelopePointEx);
   LoadFn(rec, "InsertEnvelopePoint",             g_api.InsertEnvelopePoint);
   LoadFn(rec, "GetEnvelopeScalingMode",          g_api.GetEnvelopeScalingMode);
   LoadFn(rec, "GetSetMediaItemTakeInfo",         g_api.GetSetMediaItemTakeInfo);
