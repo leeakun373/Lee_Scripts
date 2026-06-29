@@ -3,6 +3,7 @@
 #include "plugin/CommandRegistry.h"
 #include "plugin/FeatureRegistry.h"
 #include "plugin/PluginContext.h"
+#include "shared/reaper/JsApi.h"
 #include "shared/reaper/ReaImGuiApi.h"
 
 extern "C" REAPER_PLUGIN_DLL_EXPORT int REAPER_PLUGIN_ENTRYPOINT(REAPER_PLUGIN_HINSTANCE hInst,
@@ -24,6 +25,7 @@ extern "C" REAPER_PLUGIN_DLL_EXPORT int REAPER_PLUGIN_ENTRYPOINT(REAPER_PLUGIN_H
   lee::SetDllHInstance(hInst);
 
   lee::reaimgui::Init(rec);
+  lee::jsapi::Init(rec);
 
   lee::RegisterAllFeatures();
 

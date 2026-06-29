@@ -38,6 +38,15 @@ function Ensure-ReaperHeaders {
     }
 }
 
+function Ensure-NlohmannJson {
+    New-Item -ItemType Directory -Force -Path (Join-Path $ThirdPartyDir "nlohmann") | Out-Null
+    $dest = Join-Path $ThirdPartyDir "nlohmann\json.hpp"
+    if (Test-Path -LiteralPath $dest) { return }
+    $url = "https://github.com/nlohmann/json/releases/download/v3.11.3/json.hpp"
+    Write-Host ("Downloading json.hpp ...") -ForegroundColor Yellow
+    Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing
+}
+
 function Ensure-ReaImGuiHeader {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     New-Item -ItemType Directory -Force -Path $ReaImGuiDir | Out-Null

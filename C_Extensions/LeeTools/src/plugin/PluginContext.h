@@ -62,6 +62,8 @@ struct ApiTable {
 
   // Projects.
   void* (*EnumProjects)(int idx, char* projfn_out_opt, int projfn_out_opt_sz) = nullptr;
+  void (*GetProjectPath)(char* bufOut, int bufOut_sz) = nullptr;
+  void (*GetProjectPathEx)(void* proj, char* bufOut, int bufOut_sz) = nullptr;
   int (*GetProjExtState)(void* proj, const char* extname, const char* key,
                          char* val_out_need_big, int val_out_need_big_sz) = nullptr;
   int (*SetProjExtState)(void* proj, const char* extname, const char* key, const char* value) = nullptr;
@@ -71,6 +73,7 @@ struct ApiTable {
   // Commands / undo / pointer validation.
   void (*Main_OnCommand)(int command, int flag) = nullptr;
   int (*NamedCommandLookup)(const char* command_name) = nullptr;
+  int (*InsertMedia)(const char* file, int mode) = nullptr;
   void (*Undo_BeginBlock2)(void* proj) = nullptr;
   void (*Undo_EndBlock2)(void* proj, const char* descchange, int extraflags) = nullptr;
   bool (*ValidatePtr2)(void* proj, void* pointer, const char* ctypename) = nullptr;
@@ -78,6 +81,26 @@ struct ApiTable {
   void (*PreventUIRefresh)(int prevent_count) = nullptr;
   HWND (*GetMainHwnd)() = nullptr;
   void (*SetExtState)(const char* section, const char* key, const char* value, bool persist) = nullptr;
+  void (*GetResourcePath)(char* pathOut, int pathOut_sz) = nullptr;
+  int (*ShowMessageBox)(const char* msg, const char* title, int type) = nullptr;
+  double (*time_precise)() = nullptr;
+  int (*GetCursorContext)() = nullptr;
+  void* (*GetLastTouchedTrack)() = nullptr;
+
+  // RadialMenu: selection / FX / drop
+  int (*CountSelectedTracks)(void* proj) = nullptr;
+  void* (*GetSelectedTrack)(void* proj, int sel) = nullptr;
+  int (*TrackFX_AddByName)(void* track, const char* fxname, bool recFX, int instantiate) = nullptr;
+  int (*TakeFX_AddByName)(void* take, const char* fxname, int instantiate) = nullptr;
+  void (*TrackFX_Show)(void* track, int index, int showFlag) = nullptr;
+  void (*TakeFX_Show)(void* take, int index, int showFlag) = nullptr;
+  void* (*GetItemFromPoint)(int screen_x, int screen_y, bool allow_locked) = nullptr;
+  void* (*GetTrackFromPoint)(int screen_x, int screen_y, int* infoOutOptional) = nullptr;
+  void (*Main_openProject)(const char* projfn) = nullptr;
+  int (*CF_EnumerateActions)(void* section, int idx, char* nameOut) = nullptr;
+  const char* (*CF_GetCommandText)(void* section, int command, char* bufOutNeedBig,
+                                   int bufOutNeedBig_sz) = nullptr;
+  bool (*EnumInstalledFX)(int idx, char* nameOut, int nameOut_sz, char* identOut) = nullptr;
 
   // Item Hub: envelopes + tracks
   void* (*GetMediaItemTrack)(void* item) = nullptr;
@@ -139,6 +162,8 @@ struct ApiTable {
   int (*CountTracks)(void* proj) = nullptr;
   void* (*GetTrack)(void* proj, int idx) = nullptr;
   void (*InsertTrackAtIndex)(int idx, bool wantDefaults) = nullptr;
+  void (*SetOnlyTrackSelected)(void* track) = nullptr;
+  void (*SetEditCurPos)(double time, bool moveview, bool seekplay) = nullptr;
   void (*TrackList_AdjustWindows)(bool isMinor) = nullptr;
   double (*GetMediaTrackInfo_Value)(void* tr, const char* parmname) = nullptr;
   bool (*GetSetMediaTrackInfo_String)(void* tr, const char* parmname, char* str, bool set) = nullptr;

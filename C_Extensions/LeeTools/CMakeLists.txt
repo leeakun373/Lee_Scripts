@@ -6,6 +6,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(REAIMGUI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/reaimgui")
+set(RADIAL_MENU_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../RadialMenu/src")
+set(NLOHMANN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/nlohmann")
 
 add_library(reaper_lee_tools SHARED
   # plugin shell
@@ -17,6 +19,7 @@ add_library(reaper_lee_tools SHARED
 
   # shared (cross-feature, no business logic)
   src/shared/reaper/ReaImGuiApi.cpp
+  src/shared/reaper/JsApi.cpp
   src/shared/ui/LeeUiTheme.cpp
 
   # platform (OS capabilities)
@@ -34,6 +37,10 @@ add_library(reaper_lee_tools SHARED
   src/features/item_hub/domain/ParamSpec.cpp
   src/features/item_hub/domain/Session.cpp
   src/features/item_hub/ui/HubWindow.cpp
+
+  # features/project_explorer
+  src/features/project_explorer/Register.cpp
+  src/features/project_explorer/ui/Window.cpp
 
   # shared/dsp
   src/shared/dsp/Fft.cpp
@@ -58,11 +65,31 @@ add_library(reaper_lee_tools SHARED
   src/features/splitter/domain/algorithms/TonalNoise.cpp
   src/features/splitter/domain/algorithms/FgAmbient.cpp
   src/features/splitter/ui/SplitterWindow.cpp
+
+  # RadialMenu (C_Extensions/RadialMenu development tree)
+  ${RADIAL_MENU_DIR}/Register.cpp
+  ${RADIAL_MENU_DIR}/shared/UiNotify.cpp
+  ${RADIAL_MENU_DIR}/shared/ReaImGuiCoords.cpp
+  ${RADIAL_MENU_DIR}/domain/ConfigDefaults.cpp
+  ${RADIAL_MENU_DIR}/domain/ConfigStore.cpp
+  ${RADIAL_MENU_DIR}/domain/HitTest.cpp
+  ${RADIAL_MENU_DIR}/domain/LayoutBake.cpp
+  ${RADIAL_MENU_DIR}/domain/Execution.cpp
+  ${RADIAL_MENU_DIR}/domain/I18n.cpp
+  ${RADIAL_MENU_DIR}/domain/Catalog.cpp
+  ${RADIAL_MENU_DIR}/domain/SetupOps.cpp
+  ${RADIAL_MENU_DIR}/runtime/InputHook.cpp
+  ${RADIAL_MENU_DIR}/runtime/WheelView.cpp
+  ${RADIAL_MENU_DIR}/runtime/RuntimeWindow.cpp
+  ${RADIAL_MENU_DIR}/ui/setup/SetupWindow.cpp
+  ${RADIAL_MENU_DIR}/ui/setup/SetupPreview.cpp
 )
 
 target_include_directories(reaper_lee_tools SYSTEM PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
   "${CMAKE_CURRENT_SOURCE_DIR}/src"
+  "${RADIAL_MENU_DIR}"
+  "${NLOHMANN_DIR}"
   "${REAIMGUI_DIR}"
 )
 

@@ -40,6 +40,8 @@ void LoadApiTable(reaper_plugin_info_t* rec) {
   LoadFn(rec, "guidToString",                    g_api.guidToString);
 
   LoadFn(rec, "EnumProjects",                    g_api.EnumProjects);
+  LoadFn(rec, "GetProjectPath",                  g_api.GetProjectPath);
+  LoadFn(rec, "GetProjectPathEx",                g_api.GetProjectPathEx);
   LoadFn(rec, "GetProjExtState",                 g_api.GetProjExtState);
   LoadFn(rec, "SetProjExtState",                 g_api.SetProjExtState);
   LoadFn(rec, "MarkProjectDirty",                g_api.MarkProjectDirty);
@@ -47,6 +49,7 @@ void LoadApiTable(reaper_plugin_info_t* rec) {
 
   LoadFn(rec, "Main_OnCommand",                  g_api.Main_OnCommand);
   LoadFn(rec, "NamedCommandLookup",              g_api.NamedCommandLookup);
+  LoadFn(rec, "InsertMedia",                     g_api.InsertMedia);
   LoadFn(rec, "Undo_BeginBlock2",                g_api.Undo_BeginBlock2);
   LoadFn(rec, "Undo_EndBlock2",                  g_api.Undo_EndBlock2);
   LoadFn(rec, "ValidatePtr2",                    g_api.ValidatePtr2);
@@ -54,6 +57,23 @@ void LoadApiTable(reaper_plugin_info_t* rec) {
   LoadFn(rec, "PreventUIRefresh",                g_api.PreventUIRefresh);
   LoadFn(rec, "GetMainHwnd",                     g_api.GetMainHwnd);
   LoadFn(rec, "SetExtState",                     g_api.SetExtState);
+  LoadFn(rec, "GetResourcePath",                 g_api.GetResourcePath);
+  LoadFn(rec, "ShowMessageBox",                  g_api.ShowMessageBox);
+  LoadFn(rec, "time_precise",                    g_api.time_precise);
+  LoadFn(rec, "GetCursorContext",                g_api.GetCursorContext);
+  LoadFn(rec, "GetLastTouchedTrack",             g_api.GetLastTouchedTrack);
+  LoadFn(rec, "CountSelectedTracks",             g_api.CountSelectedTracks);
+  LoadFn(rec, "GetSelectedTrack",                g_api.GetSelectedTrack);
+  LoadFn(rec, "TrackFX_AddByName",              g_api.TrackFX_AddByName);
+  LoadFn(rec, "TakeFX_AddByName",               g_api.TakeFX_AddByName);
+  LoadFn(rec, "TrackFX_Show",                    g_api.TrackFX_Show);
+  LoadFn(rec, "TakeFX_Show",                     g_api.TakeFX_Show);
+  LoadFn(rec, "GetItemFromPoint",                g_api.GetItemFromPoint);
+  LoadFn(rec, "GetTrackFromPoint",               g_api.GetTrackFromPoint);
+  LoadFn(rec, "Main_openProject",                g_api.Main_openProject);
+  LoadFn(rec, "CF_EnumerateActions",             g_api.CF_EnumerateActions);
+  LoadFn(rec, "CF_GetCommandText",               g_api.CF_GetCommandText);
+  LoadFn(rec, "EnumInstalledFX",                 g_api.EnumInstalledFX);
   LoadFn(rec, "GetMediaItemTrack",               g_api.GetMediaItemTrack);
   LoadFn(rec, "CountTakeEnvelopes",              g_api.CountTakeEnvelopes);
   LoadFn(rec, "GetTakeEnvelope",                 g_api.GetTakeEnvelope);
@@ -92,6 +112,8 @@ void LoadApiTable(reaper_plugin_info_t* rec) {
   LoadFn(rec, "CountTracks",                     g_api.CountTracks);
   LoadFn(rec, "GetTrack",                        g_api.GetTrack);
   LoadFn(rec, "InsertTrackAtIndex",              g_api.InsertTrackAtIndex);
+  LoadFn(rec, "SetOnlyTrackSelected",            g_api.SetOnlyTrackSelected);
+  LoadFn(rec, "SetEditCurPos",                   g_api.SetEditCurPos);
   LoadFn(rec, "TrackList_AdjustWindows",         g_api.TrackList_AdjustWindows);
   LoadFn(rec, "GetMediaTrackInfo_Value",         g_api.GetMediaTrackInfo_Value);
   LoadFn(rec, "GetSetMediaTrackInfo_String",     g_api.GetSetMediaTrackInfo_String);
