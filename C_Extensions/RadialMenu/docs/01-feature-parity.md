@@ -6,7 +6,7 @@
 - [x] Pin、扇区 hover / 点击、`hover_to_open` 离开扇区收起子菜单
 - [x] 子菜单 4×3 网格（至少 12 格）、空槽占位按钮、圆角/半透明样式
 - [x] 扇区膨胀（指数进入、离开归零）、`anim_enable` + `duration_open`
-- [x] 扇区颜色分段插值（Mantrika）
+- [x] Mantrika 深色基底 + `sector.color` 柔和着色、hover 分段插值
 - [x] Pin 模式 hover 限制在外半径内
 - [x] 外圈左键：先关子菜单，再关轮盘（非 Pin）
 - [x] 拖拽槽位时主轮盘 `NoInputs` 穿透
@@ -18,7 +18,7 @@
 ## 执行
 
 - [x] `action` / `fx` / `chain` / `template`
-- [x] NamedCommand 字符串、`CF_GetCommandText` 自动填名（Setup Inspector）
+- [x] NamedCommand 字符串、REAPER 原生动作枚举/名称（旧版回退 SWS）
 
 ## Setup
 
@@ -33,7 +33,7 @@
 
 ## 刻意与 Lua 相同的不对齐项
 
-- 运行时/预览忽略 `sector.color`（Mantrika 硬编码）
+- Setup 预览仍以固定 Mantrika 基底为主；运行时会混入 `sector.color`
 - `duration_submenu`、扇区 icon：Lua Setup 亦无 UI
 - `submenu_width/height`：已写入 JSON 与 Setup 滑块；运行时子菜单尺寸仍由 slot 布局推导
 

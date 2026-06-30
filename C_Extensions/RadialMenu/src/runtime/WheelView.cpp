@@ -28,15 +28,31 @@ constexpr int kColPinInactive = 0x505050B4;
 constexpr int kColPinShadow = 0x00000096;
 constexpr int kColPinGlow = 0xFFD70060;
 
-int SectorColors(float expansion_progress, int& col_out) {
+int BlendWithSector(int base, const Sector& sector, float amount) {
+  const int br = (base >> 24) & 0xFF;
+  const int bg = (base >> 16) & 0xFF;
+  const int bb = (base >> 8) & 0xFF;
+  const int ba = base & 0xFF;
+  const auto blend = [amount](int a, int b) {
+    return static_cast<int>(a + (b - a) * amount);
+  };
+  return RgbaToU32(blend(br, sector.color.r), blend(bg, sector.color.g),
+                   blend(bb, sector.color.b), ba);
+}
+
+int SectorColors(const Sector& sector, float expansion_progress, int& col_out) {
   expansion_progress = std::max(0.f, std::min(1.f, expansion_progress));
+  const int normal_in = BlendWithSector(kColSectorIn0, sector, 0.18f);
+  const int normal_out = BlendWithSector(kColSectorOut0, sector, 0.24f);
+  const int active_in = BlendWithSector(kColSectorIn1, sector, 0.12f);
+  const int active_out = BlendWithSector(kColSectorOut1, sector, 0.16f);
   if (expansion_progress <= 0.f) {
-    col_out = kColSectorOut0;
-    return kColSectorIn0;
+    col_out = normal_out;
+    return normal_in;
   }
   if (expansion_progress >= 1.f) {
-    col_out = kColSectorOut1;
-    return kColSectorIn1;
+    col_out = active_out;
+    return active_in;
   }
   auto lerp_u32 = [](int a, int b, float t) -> int {
     const int ar = (a >> 24) & 0xFF, ag = (a >> 16) & 0xFF, ab = (a >> 8) & 0xFF, aa = a & 0xFF;
@@ -45,8 +61,8 @@ int SectorColors(float expansion_progress, int& col_out) {
                      static_cast<int>(ab + (bb - ab) * t), static_cast<int>(aa + (ba - aa) * t));
   };
   const float t = expansion_progress;
-  col_out = lerp_u32(kColSectorOut0, kColSectorOut1, t);
-  return lerp_u32(kColSectorIn0, kColSectorIn1, t);
+  col_out = lerp_u32(normal_out, active_out, t);
+  return lerp_u32(normal_in, active_in, t);
 }
 
 int SegmentCount(float avg_radius, float angle_span) {
@@ -145,6 +161,24 @@ void DrawPinButton(ImGui_DrawList* dl, float cx, float cy, bool is_pinned) {
   }
 }
 
+void DrawWheelFoundation(ImGui_DrawList* dl, float cx, float cy, float inner_r,
+                         float outer_r) {
+  if (!dl) return;
+  // Soft ring shadow plus a translucent center plate. This keeps the wheel
+  // readable over REAPER's arrange grid while retaining the overlay feel.
+  DrawArcStroke(dl, cx, cy + 3.f, std::max(0.f, inner_r - 3.f), outer_r + 7.f,
+                0.f, static_cast<float>(kTwoPi), RgbaToU32(0, 0, 0, 42));
+  DrawArcStroke(dl, cx, cy + 2.f, std::max(0.f, inner_r - 1.f), outer_r + 4.f,
+                0.f, static_cast<float>(kTwoPi), RgbaToU32(0, 0, 0, 64));
+  if (ImGui::DrawList_AddCircleFilled) {
+    ImGui::DrawList_AddCircleFilled(dl, cx, cy, std::max(0.f, inner_r - 1.f),
+                                    RgbaToU32(50, 50, 50, 218), 48);
+  }
+  if (ImGui::DrawList_AddCircle) {
+    ImGui::DrawList_AddCircle(dl, cx, cy, inner_r, RgbaToU32(15, 15, 15, 190), 48, 2.0);
+  }
+}
+
 void DrawSectorText(ImGui_Context* ctx, ImGui_DrawList* dl, float cx, float cy, float text_radius,
                     float a0, float a1, const Sector& sector, bool is_active) {
   if (!ctx || !dl || !ImGui::GetTextLineHeight || !ImGui::CalcTextSize ||
@@ -213,6 +247,8 @@ void DrawWheel(ImGui_Context* ctx, const AppConfig& cfg, int hovered_sector_inde
   const float max_expand_px =
       std::min(static_cast<float>(cfg.menu.hover_expansion_pixels), 10.f);
 
+  DrawWheelFoundation(dl, cx, cy, inner, outer_base);
+
   for (int i = 0; i < n; ++i) {
     const float a0 = static_cast<float>(kStartOffset + i * step);
     const float a1 = static_cast<float>(kStartOffset + (i + 1) * step);
@@ -237,7 +273,7 @@ void DrawWheel(ImGui_Context* ctx, const AppConfig& cfg, int hovered_sector_inde
     const float draw_end = a1 - gap_rad;
 
     int col_out = kColSectorOut0;
-    SectorColors(expansion_progress, col_out);
+    SectorColors(cfg.sectors[i], expansion_progress, col_out);
 
     DrawSectorGapFill(dl, cx, cy, inner, outer, a0, draw_start, a1, draw_end);
     DrawArcStroke(dl, cx, cy, inner, outer, draw_start, draw_end, col_out);
@@ -252,6 +288,15 @@ void DrawWheel(ImGui_Context* ctx, const AppConfig& cfg, int hovered_sector_inde
                    expansion_progress > 0.5f);
   }
 
+  // Redraw the center plate after the thick sector strokes so the inner edge
+  // remains clean and circular.
+  if (ImGui::DrawList_AddCircleFilled) {
+    ImGui::DrawList_AddCircleFilled(dl, cx, cy, std::max(0.f, inner - 1.f),
+                                    RgbaToU32(50, 50, 50, 218), 48);
+  }
+  if (ImGui::DrawList_AddCircle) {
+    ImGui::DrawList_AddCircle(dl, cx, cy, inner, RgbaToU32(15, 15, 15, 190), 48, 2.0);
+  }
   DrawPinButton(dl, cx, cy, is_pinned);
 
   if (style_pushed > 0 && ImGui::PopStyleVar) ImGui::PopStyleVar(ctx, style_pushed);

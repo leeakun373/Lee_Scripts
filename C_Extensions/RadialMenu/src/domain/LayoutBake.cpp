@@ -36,8 +36,9 @@ SubmenuLayout ComputeSubmenuLayout(const AppConfig& cfg, int slot_count) {
   L.gap = cfg.menu.submenu_gap;
   L.padding = cfg.menu.submenu_padding;
   L.cols = 4;
-  const int count =
-      std::max(12, std::min(cfg.menu.max_slots_per_sector, std::max(slot_count, 12)));
+  // Preserve every configured slot and its position. The Lua runtime expands
+  // past the 4x3 minimum when a legacy preset contains more than 12 slots.
+  const int count = std::max(12, slot_count);
   L.rows = (count + L.cols - 1) / L.cols;
   L.slot_count = count;
   L.win_w = L.slot_w * L.cols + L.gap * (L.cols - 1) + L.padding * 2;
@@ -51,8 +52,9 @@ SubmenuPosition ComputeSubmenuPosition(const AppConfig& cfg, int sector_index_0b
   const int n = static_cast<int>(cfg.sectors.size());
   if (sector_index_0based < 0 || sector_index_0based >= n) return pos;
 
-  const int slots =
-      CountNonEmptySlots(cfg.sectors[sector_index_0based].slots);
+  const auto& sector_slots = cfg.sectors[sector_index_0based].slots;
+  const int slots = std::max(static_cast<int>(sector_slots.size()),
+                             CountNonEmptySlots(sector_slots));
   const SubmenuLayout layout = ComputeSubmenuLayout(cfg, slots);
 
   const double angle = SectorCenterAngle(sector_index_0based, n);

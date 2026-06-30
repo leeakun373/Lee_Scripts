@@ -182,7 +182,7 @@ void Execution::HandleDrop(const Slot& slot, int screen_x, int screen_y, void* p
     if (fx.empty()) return;
 
     if (api.GetItemFromPoint) {
-      void* item = api.GetItemFromPoint(screen_x, screen_y, true);
+      void* item = api.GetItemFromPoint(screen_x, screen_y, true, nullptr);
       if (item) {
         AddFxItem(item, fx.c_str(), true);
         return;

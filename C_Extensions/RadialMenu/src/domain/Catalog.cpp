@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <filesystem>
 
 
@@ -92,7 +93,7 @@ void Catalog::BuildActionsBatch(int max_items) {
 
   const auto& api = lee::Api();
 
-  if (!api.CF_EnumerateActions) {
+  if (!api.kbd_enumerateActions && !api.CF_EnumerateActions) {
 
     build_phase_ = 1;
 
@@ -108,7 +109,16 @@ void Catalog::BuildActionsBatch(int max_items) {
 
     if (added >= max_items) return;
 
-    const int cmd = api.CF_EnumerateActions(nullptr, action_index_, namebuf);
+    int cmd = 0;
+    if (api.kbd_enumerateActions) {
+      const char* native_name = nullptr;
+      void* section = api.SectionFromUniqueID ? api.SectionFromUniqueID(0) : nullptr;
+      cmd = api.kbd_enumerateActions(section, action_index_, &native_name);
+      if (native_name) strncpy_s(namebuf, native_name, sizeof(namebuf) - 1);
+    } else {
+      cmd = api.CF_EnumerateActions(0, action_index_, namebuf,
+                                    static_cast<int>(sizeof(namebuf)));
+    }
 
     if (cmd <= 0) {
 
@@ -148,17 +158,15 @@ void Catalog::BuildFxBatch(int max_items) {
 
   }
 
-  char name[512] = {};
-
-  char ident[256] = {};
-
   int added = 0;
 
   for (;; ++fx_index_) {
 
     if (added >= max_items) return;
 
-    if (!api.EnumInstalledFX(fx_index_, name, static_cast<int>(sizeof(name)), ident)) {
+    const char* name = nullptr;
+    const char* ident = nullptr;
+    if (!api.EnumInstalledFX(fx_index_, &name, &ident)) {
 
       std::sort(fx_.begin(), fx_.end(),
 
@@ -174,9 +182,9 @@ void Catalog::BuildFxBatch(int max_items) {
 
     FxEntry e;
 
-    e.original_name = name;
+    e.original_name = name ? name : "";
 
-    e.name = name;
+    e.name = e.original_name;
 
     e.type = "Other";
 
@@ -255,8 +263,12 @@ void Catalog::BuildResourceFilesBatch() {
     building_ = false;
     return;
   }
-  char res[512] = {};
-  api.GetResourcePath(res, sizeof(res));
+  const char* res = api.GetResourcePath();
+  if (!res || !*res) {
+    built_ = true;
+    building_ = false;
+    return;
+  }
   namespace fs = std::filesystem;
   const fs::path root(res);
   const auto scan_ext = [&](const fs::path& dir, const char* ext, const char* type) {

@@ -9,7 +9,6 @@
 
 #include "domain/ConfigDefaults.h"
 #include "plugin/PluginContext.h"
-#include "shared/DebugSessionLog.h"
 #include "shared/UiNotify.h"
 
 namespace lee::radial_menu {
@@ -252,12 +251,9 @@ ConfigStore& ConfigStore::Instance() {
 }
 
 std::string ConfigStore::ConfigFilePath() const {
-  char buf[4096] = {};
   const auto& api = lee::Api();
-  if (api.GetResourcePath) {
-    api.GetResourcePath(buf, static_cast<int>(sizeof(buf)));
-  }
-  std::string base = buf;
+  const char* resource_path = api.GetResourcePath ? api.GetResourcePath() : nullptr;
+  std::string base = resource_path ? resource_path : "";
   if (!base.empty() && base.back() != '\\' && base.back() != '/') base += "/";
   return base + "Scripts/Lee_Scripts/RadialMenu_Tool/config.json";
 }
@@ -353,9 +349,6 @@ bool ConfigStore::LoadActive(AppConfig& out) {
 }
 
 bool ConfigStore::LoadActiveOnly(AppConfig& out) {
-  // #region agent log
-  dbg::Log("H", "ConfigStore.cpp:LoadActiveOnly", "entry", "{}");
-  // #endregion
   auto fallback = [&]() -> bool {
     out = MakeDefaultAppConfig();
     MergeWithDefaults(out);
@@ -365,48 +358,24 @@ bool ConfigStore::LoadActiveOnly(AppConfig& out) {
   try {
     const std::string path = ConfigFilePath();
     std::ifstream in(path);
-    if (!in) {
-      dbg::Log("H", "ConfigStore.cpp:LoadActiveOnly", "file missing", "{}");
-      return fallback();
-    }
+    if (!in) return fallback();
     std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    // #region agent log
-    {
-      char buf[64];
-      snprintf(buf, sizeof(buf), "{\"bytes\":%d}", static_cast<int>(content.size()));
-      dbg::Log("H", "ConfigStore.cpp:LoadActiveOnly", "file read", buf);
-    }
-    // #endregion
 
     std::string active_json = ExtractJsonObjectForKey(content, "active_config");
     json cfg_json;
     if (!active_json.empty()) {
       cfg_json = json::parse(active_json);
-      // #region agent log
-      dbg::Log("H", "ConfigStore.cpp:LoadActiveOnly", "active_config slice parsed", "{}");
-      // #endregion
     } else {
       cfg_json = json::parse(content);
-      // #region agent log
-      dbg::Log("H", "ConfigStore.cpp:LoadActiveOnly", "full file parsed (legacy)", "{}");
-      // #endregion
     }
     if (!cfg_json.is_object()) return fallback();
     out = ParseAppConfig(cfg_json);
-    // #region agent log
-    {
-      char buf[48];
-      snprintf(buf, sizeof(buf), "{\"sectors\":%d}", static_cast<int>(out.sectors.size()));
-      dbg::Log("H", "ConfigStore.cpp:LoadActiveOnly", "ParseAppConfig ok", buf);
-    }
-    // #endregion
     MergeWithDefaults(out);
     std::string err;
     if (!Validate(out, err)) return fallback();
     PreprocessSectorText(out);
     return true;
   } catch (...) {
-    dbg::Log("H", "ConfigStore.cpp:LoadActiveOnly", "exception", "{}");
     return fallback();
   }
 }

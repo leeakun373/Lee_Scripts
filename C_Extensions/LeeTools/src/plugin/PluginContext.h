@@ -81,7 +81,7 @@ struct ApiTable {
   void (*PreventUIRefresh)(int prevent_count) = nullptr;
   HWND (*GetMainHwnd)() = nullptr;
   void (*SetExtState)(const char* section, const char* key, const char* value, bool persist) = nullptr;
-  void (*GetResourcePath)(char* pathOut, int pathOut_sz) = nullptr;
+  const char* (*GetResourcePath)() = nullptr;
   int (*ShowMessageBox)(const char* msg, const char* title, int type) = nullptr;
   double (*time_precise)() = nullptr;
   int (*GetCursorContext)() = nullptr;
@@ -94,13 +94,17 @@ struct ApiTable {
   int (*TakeFX_AddByName)(void* take, const char* fxname, int instantiate) = nullptr;
   void (*TrackFX_Show)(void* track, int index, int showFlag) = nullptr;
   void (*TakeFX_Show)(void* take, int index, int showFlag) = nullptr;
-  void* (*GetItemFromPoint)(int screen_x, int screen_y, bool allow_locked) = nullptr;
+  void* (*GetItemFromPoint)(int screen_x, int screen_y, bool allow_locked,
+                            void** takeOutOptional) = nullptr;
   void* (*GetTrackFromPoint)(int screen_x, int screen_y, int* infoOutOptional) = nullptr;
   void (*Main_openProject)(const char* projfn) = nullptr;
-  int (*CF_EnumerateActions)(void* section, int idx, char* nameOut) = nullptr;
-  const char* (*CF_GetCommandText)(void* section, int command, char* bufOutNeedBig,
-                                   int bufOutNeedBig_sz) = nullptr;
-  bool (*EnumInstalledFX)(int idx, char* nameOut, int nameOut_sz, char* identOut) = nullptr;
+  void* (*SectionFromUniqueID)(int unique_id) = nullptr;
+  int (*kbd_enumerateActions)(void* section, int idx, const char** nameOut) = nullptr;
+  const char* (*kbd_getTextFromCmd)(int command, void* section) = nullptr;
+  // SWS fallbacks for REAPER versions older than 6.71.
+  int (*CF_EnumerateActions)(int section, int idx, char* nameOut, int nameOut_sz) = nullptr;
+  const char* (*CF_GetCommandText)(int section, int command) = nullptr;
+  bool (*EnumInstalledFX)(int idx, const char** nameOut, const char** identOut) = nullptr;
 
   // Item Hub: envelopes + tracks
   void* (*GetMediaItemTrack)(void* item) = nullptr;

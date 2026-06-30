@@ -1,5 +1,7 @@
 #include "runtime/InputHook.h"
 
+#include <array>
+
 #include <windows.h>
 
 #include "plugin/PluginContext.h"
@@ -10,10 +12,11 @@ namespace {
 
 constexpr int kVKeyMin = 1;
 constexpr int kVKeyMax = 255;
+constexpr int kVKeyStateSize = 255;
 
 unsigned char vkey_byte(const char* st, int vk) {
   if (!st || vk < kVKeyMin || vk > kVKeyMax) return 0;
-  return static_cast<unsigned char>(st[vk]);
+  return static_cast<unsigned char>(st[vk - 1]);
 }
 
 bool is_valid_vk(int vk) { return vk >= kVKeyMin && vk <= kVKeyMax; }
@@ -31,16 +34,16 @@ bool InputHook::try_capture_at(double script_start_time) {
   auto* get_state = lee::jsapi::GetVKeysGetState();
   auto* get_down = lee::jsapi::GetVKeysGetDown();
   if (get_state && get_down) {
-    const char* st = get_state(script_start_time - 1.0);
-    const char* dn = get_down(script_start_time);
-    if (st && dn) {
-      for (int i = kVKeyMin; i <= kVKeyMax; ++i) {
-        if (vkey_byte(st, i) != 0 || vkey_byte(dn, i) != 0) {
-          key_ = i;
-          start_time_ = script_start_time;
-          schedule_intercept(i, 1);
-          return true;
-        }
+    std::array<char, kVKeyStateSize> state{};
+    std::array<char, kVKeyStateSize> down{};
+    get_state(script_start_time - 1.0, state.data(), static_cast<int>(state.size()));
+    get_down(script_start_time, down.data(), static_cast<int>(down.size()));
+    for (int i = kVKeyMin; i <= kVKeyMax; ++i) {
+      if (vkey_byte(state.data(), i) != 0 || vkey_byte(down.data(), i) != 0) {
+        key_ = i;
+        start_time_ = script_start_time;
+        schedule_intercept(i, 1);
+        return true;
       }
     }
   }
@@ -89,10 +92,9 @@ bool InputHook::key_held() const {
   auto* get_state = lee::jsapi::GetVKeysGetState();
   if (!get_state) return false;
 
-  const char* st = get_state(start_time_ - 1.0);
-  if (!st) return false;
-
-  return vkey_byte(st, key_) != 0;
+  std::array<char, kVKeyStateSize> state{};
+  get_state(start_time_ - 1.0, state.data(), static_cast<int>(state.size()));
+  return vkey_byte(state.data(), key_) != 0;
 }
 
 void InputHook::intercept(int on) {

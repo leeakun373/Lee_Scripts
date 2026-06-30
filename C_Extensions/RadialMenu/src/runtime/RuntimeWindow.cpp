@@ -17,7 +17,6 @@
 #include "shared/reaper/ReaImGuiApi.h"
 #include "shared/UiNotify.h"
 #include "shared/ReaImGuiCoords.h"
-#include "shared/DebugSessionLog.h"
 #include "ui/setup/SetupWindow.h"
 
 namespace lee::radial_menu {
@@ -102,34 +101,35 @@ void RuntimeWindow::ensure_context() {
   }
 
   try {
-    // hello_world.cpp: CreateContext only; no font Attach on overlay wheel.
     ctx_ = ImGui::CreateContext("RadialMenu_Wheel");
   } catch (...) {
     ctx_ = nullptr;
   }
+  if (ctx_) lee::ui::EnsureFonts(ctx_, theme_fonts_);
+}
+
+void RuntimeWindow::invalidate_context() {
+  if (ctx_ && context_is_valid()) lee::ui::DestroyFonts(ctx_, theme_fonts_);
+  ctx_ = nullptr;
+  theme_fonts_ = {};
+  native_warmed_ = false;
+  frame_open_ = false;
+  context_release_pending_ = false;
 }
 
 void RuntimeWindow::destroy() {
-  if (ctx_ && context_is_valid()) {
-    lee::ui::DestroyFonts(ctx_, theme_fonts_);
-    DestroyImGuiContext(ctx_);
-  }
-  ctx_ = nullptr;
-  native_warmed_ = false;
+  invalidate_context();
   active_ = false;
-  config_pending_ = false;
-  config_file_deferred_ = false;
-  config_file_defer_ticks_ = 0;
   show_submenu_ = false;
   defer_key_ = false;
-  (void)config_storage_.release();
+  config_storage_.reset();
   input_.reset();
+  input_.tick_pending_intercept_release();
   const auto& api = lee::Api();
   if (api.SetExtState) api.SetExtState("RadialMenu_Tool", "Running", "0", false);
 }
 
 void RuntimeWindow::maybe_reload_config() {
-  if (config_file_deferred_) return;
   const std::string tok = ConfigStore::Instance().LastConfigUpdateToken();
   if (!tok.empty() && tok != last_config_token_) {
     (void)ConfigStore::Instance().LoadActiveOnly(config());
@@ -139,23 +139,17 @@ void RuntimeWindow::maybe_reload_config() {
 }
 
 void RuntimeWindow::force_reset_config() {
-  // Release without delete: avoids ~AppConfig on heap corrupted by legacy memset reset.
-  (void)config_storage_.release();
   config_storage_ = std::make_unique<AppConfig>(MakeDefaultAppConfig());
   sector_expand_.clear();
 }
 
 bool RuntimeWindow::open_with_hotkey(double trigger_time) {
-  // #region agent log
-  dbg::Log("E", "RuntimeWindow.cpp:open_with_hotkey", "entry", "{\"runId\":\"post-fix2\"}");
-  // #endregion
   if (active_ && !context_is_valid()) {
     active_ = false;
     show_submenu_ = false;
-    theme_fonts_ = {};
-    DestroyImGuiContext(ctx_);
-    native_warmed_ = false;
-    input_.reset_local_state_only();
+    input_.reset();
+    input_.tick_pending_intercept_release();
+    invalidate_context();
   }
   const char* running = lee::GetExtState("RadialMenu_Tool", "Running");
   if (running && running[0] == '1') return false;
@@ -178,23 +172,13 @@ bool RuntimeWindow::open_with_hotkey(double trigger_time) {
   if (!input_.capture_trigger_key(trigger_time)) {
     input_.set_manual_hold_mode(true);
   }
-  // #region agent log
-  {
-    char buf[32];
-    snprintf(buf, sizeof(buf), "{\"key\":%d}", input_.trigger_key());
-    dbg::Log("E", "RuntimeWindow.cpp:open_with_hotkey", "after capture_trigger_key", buf);
-  }
-  // #endregion
 
   force_reset_config();
-  config_pending_ = true;
-  // #region agent log
-  {
-    char buf[48];
-    snprintf(buf, sizeof(buf), "{\"sectors\":%d}", static_cast<int>(config().sectors.size()));
-    dbg::Log("H", "RuntimeWindow.cpp:open_with_hotkey", "config reset ok", buf);
-  }
-  // #endregion
+  (void)ConfigStore::Instance().LoadActiveOnly(config());
+  ConfigStore::Instance().MergeWithDefaults(config());
+  ConfigStore::Instance().PreprocessSectorText(config());
+  sector_expand_.assign(config().sectors.size(), 0.f);
+  last_config_token_ = ConfigStore::Instance().LastConfigUpdateToken();
 
   if (api.SetExtState) api.SetExtState("RadialMenu_Tool", "Running", "1", false);
 
@@ -212,80 +196,7 @@ bool RuntimeWindow::open_with_hotkey(double trigger_time) {
   active_sector_ = -1;
   clicked_sector_ = -1;
   suppress_render_ = 0;
-  // #region agent log
-  {
-    char buf[128];
-    snprintf(buf, sizeof(buf),
-             "{\"key\":%d,\"ctxDeferred\":1,\"sectors\":%d,\"runId\":\"post-fix2\"}",
-             input_.trigger_key(), static_cast<int>(config().sectors.size()));
-    dbg::Log("E", "RuntimeWindow.cpp:open_with_hotkey", "return true", buf);
-  }
-  // #endregion
   return true;
-}
-
-void RuntimeWindow::ensure_config_loaded() {
-  if (!config_pending_) return;
-  config_pending_ = false;
-  // #region agent log
-  dbg::Log("H", "RuntimeWindow.cpp:ensure_config_loaded", "start", "{}");
-  // #endregion
-  if (!config_storage_ || config().sectors.empty() || config().sectors.size() > 32) {
-    force_reset_config();
-  }
-  // #region agent log
-  dbg::Log("H", "RuntimeWindow.cpp:ensure_config_loaded", "before MergeWithDefaults", "{}");
-  // #endregion
-  ConfigStore::Instance().MergeWithDefaults(config());
-  // #region agent log
-  dbg::Log("H", "RuntimeWindow.cpp:ensure_config_loaded", "before PreprocessSectorText", "{}");
-  // #endregion
-  ConfigStore::Instance().PreprocessSectorText(config());
-  const int sector_n = static_cast<int>(config().sectors.size());
-  sector_expand_.assign(static_cast<size_t>(sector_n), 0.f);
-  // #region agent log
-  {
-    char buf[48];
-    snprintf(buf, sizeof(buf), "{\"sectors\":%d}", sector_n);
-    dbg::Log("H", "RuntimeWindow.cpp:ensure_config_loaded", "defaults only (defer file)", buf);
-  }
-  // #endregion
-  last_config_token_ = ConfigStore::Instance().LastConfigUpdateToken();
-  config_file_deferred_ = true;
-  config_file_defer_ticks_ = 2;
-}
-
-void RuntimeWindow::try_load_config_file_deferred() {
-  if (!config_file_deferred_ || !active_) return;
-  if (config_file_defer_ticks_ > 0) {
-    --config_file_defer_ticks_;
-    return;
-  }
-  config_file_deferred_ = false;
-  // #region agent log
-  dbg::Log("H", "RuntimeWindow.cpp:try_load_config_file", "before LoadActiveOnly", "{}");
-  // #endregion
-  bool config_ok = true;
-  try {
-    config_ok = ConfigStore::Instance().LoadActiveOnly(config());
-  } catch (...) {
-    config_ok = false;
-  }
-  if (!config_ok) {
-    force_reset_config();
-    ConfigStore::Instance().MergeWithDefaults(config());
-    ConfigStore::Instance().PreprocessSectorText(config());
-  }
-  sector_expand_.assign(config().sectors.size(), 0.f);
-  last_config_token_ = ConfigStore::Instance().LastConfigUpdateToken();
-  // #region agent log
-  {
-    char buf[64];
-    snprintf(buf, sizeof(buf), "{\"ok\":%d,\"sectors\":%d}", config_ok ? 1 : 0,
-             static_cast<int>(config().sectors.size()));
-    dbg::Log("H", "RuntimeWindow.cpp:try_load_config_file", "done", buf);
-  }
-  // #endregion
 }
 
 void RuntimeWindow::tick_input_hooks() {
@@ -295,9 +206,10 @@ void RuntimeWindow::tick_input_hooks() {
 void RuntimeWindow::dismiss_for_toggle() {
   active_ = false;
   show_submenu_ = false;
-  config_pending_ = false;
   defer_key_ = false;
   input_.reset();
+  if (frame_open_) context_release_pending_ = true;
+  else invalidate_context();
   const auto& api = lee::Api();
   if (api.SetExtState) api.SetExtState("RadialMenu_Tool", "Running", "0", false);
 }
@@ -311,6 +223,8 @@ void RuntimeWindow::close() {
       const auto& api = lee::Api();
       if (api.SetExtState) api.SetExtState("RadialMenu_Tool", "Running", "0", false);
     }
+    if (frame_open_) context_release_pending_ = true;
+    else invalidate_context();
   } else {
     show_submenu_ = false;
     active_sector_ = -1;
@@ -368,14 +282,6 @@ void RuntimeWindow::handle_deferred_exec() {
 
 void RuntimeWindow::tick() {
   if (in_tick_) return;
-  // #region agent log
-  {
-    char buf[64];
-    snprintf(buf, sizeof(buf), "{\"active\":%d,\"ctxValid\":%d}", active_ ? 1 : 0,
-             context_is_valid() ? 1 : 0);
-    dbg::Log("B", "RuntimeWindow.cpp:tick", "entry", buf);
-  }
-  // #endregion
   struct TickGuard {
     bool& flag;
     explicit TickGuard(bool& f) : flag(f) { flag = true; }
@@ -387,19 +293,11 @@ void RuntimeWindow::tick() {
   if (defer_key_ && !input_.defer_pending()) defer_key_ = false;
   if (!active_) return;
 
-  ensure_config_loaded();
-  // #region agent log
-  dbg::Log("B", "RuntimeWindow.cpp:tick", "after ensure_config_loaded", "{}");
-  // #endregion
-
   if (const auto& api = lee::Api(); api.GetCursorContext) {
     Execution::SetLastValidContext(api.GetCursorContext());
   }
 
   maybe_reload_config();
-  // #region agent log
-  dbg::Log("B", "RuntimeWindow.cpp:tick", "after maybe_reload_config", "{}");
-  // #endregion
 
   const auto& api = lee::Api();
   double now = api.time_precise ? api.time_precise() : 0;
@@ -408,24 +306,11 @@ void RuntimeWindow::tick() {
   update_animations(dt);
 
   if (!is_pinned_ && !input_.defer_pending() && !input_.key_held()) {
-    // #region agent log
-    dbg::Log("B", "RuntimeWindow.cpp:tick", "close key not held", "{}");
-    // #endregion
     close();
     if (!active_) return;
   }
 
-  // #region agent log
-  dbg::Log("A", "RuntimeWindow.cpp:tick", "before ensure_context", "{}");
-  // #endregion
   ensure_context();
-  // #region agent log
-  {
-    char buf[48];
-    snprintf(buf, sizeof(buf), "{\"ctxValid\":%d}", context_is_valid() ? 1 : 0);
-    dbg::Log("A", "RuntimeWindow.cpp:tick", "after ensure_context", buf);
-  }
-  // #endregion
   if (!context_is_valid() || !ImGui::SetNextWindowPos || !ImGui::Begin) return;
 
   const AppConfig& draw_cfg = management_mode_ ? mgmt_config_ : config();
@@ -433,17 +318,14 @@ void RuntimeWindow::tick() {
 
   if (!should_paint() && suppress_render_ <= 0) return;
 
-  // #region agent log
-  {
-    char buf[48];
-    snprintf(buf, sizeof(buf), "{\"runId\":\"r3\",\"nativeWarmed\":%d}", native_warmed_ ? 1 : 0);
-    dbg::Log("B", "RuntimeWindow.cpp:tick", "paint frame start", buf);
-  }
-  // #endregion
-
   int style_pushed = 0;
   int color_pushed = 0;
+  bool font_pushed = false;
   auto pop_frame_styles = [&]() {
+    if (font_pushed && ImGui::PopFont) {
+      ImGui::PopFont(ctx_);
+      font_pushed = false;
+    }
     if (color_pushed > 0 && ImGui::PopStyleColor) {
       ImGui::PopStyleColor(ctx_, color_pushed);
       color_pushed = 0;
@@ -457,9 +339,6 @@ void RuntimeWindow::tick() {
   double anchor_gui_x = anchor_screen_x_;
   double anchor_gui_y = anchor_screen_y_;
   if (!ScreenToImGui(ctx_, anchor_screen_x_, anchor_screen_y_, anchor_gui_x, anchor_gui_y)) {
-    // #region agent log
-    dbg::Log("B", "RuntimeWindow.cpp:tick", "anchor ScreenToImGui failed, recreate ctx", "{}");
-    // #endregion
     theme_fonts_ = {};
     DestroyImGuiContext(ctx_);
     native_warmed_ = false;
@@ -470,28 +349,20 @@ void RuntimeWindow::tick() {
       return;
     }
   }
-  // #region agent log
-  dbg::Log("B", "RuntimeWindow.cpp:tick", "after anchor ScreenToImGui", "{\"runId\":\"r3\"}");
-  // #endregion
-
   if (!native_warmed_) {
-    // #region agent log
-    dbg::Log("A", "RuntimeWindow.cpp:tick", "warm Begin start", "{}");
-    // #endregion
     if (ImGui::SetNextWindowPos) {
       ImGui::SetNextWindowPos(ctx_, -10000.0, -10000.0, ImGui::Cond_Always);
     }
     if (ImGui::SetNextWindowSize) ImGui::SetNextWindowSize(ctx_, 64, 64, ImGui::Cond_Always);
     bool warm_open = true;
-    if (ImGui::Begin(ctx_, "RadialMenu##lee_runtime_warm", &warm_open,
-                     ImGui::WindowFlags_NoTitleBar | ImGui::WindowFlags_NoInputs)) {
+    const bool warm_began =
+        ImGui::Begin(ctx_, "RadialMenu##lee_runtime_warm", &warm_open,
+                     ImGui::WindowFlags_NoTitleBar | ImGui::WindowFlags_NoInputs);
+    if (warm_began) {
       if (ImGui::Dummy) ImGui::Dummy(ctx_, 1.0, 1.0);
+      ImGui::End(ctx_);
     }
-    ImGui::End(ctx_);
     native_warmed_ = true;
-    // #region agent log
-    dbg::Log("A", "RuntimeWindow.cpp:tick", "warm Begin ok", "{}");
-    // #endregion
   }
 
   if (ImGui::SetNextWindowBgAlpha) ImGui::SetNextWindowBgAlpha(ctx_, 0.0);
@@ -500,6 +371,10 @@ void RuntimeWindow::tick() {
     ++style_pushed;
     ImGui::PushStyleVar(ctx_, ImGui::StyleVar_WindowBorderSize, 0.0);
     ++style_pushed;
+  }
+  if (theme_fonts_.default_font && ImGui::PushFont) {
+    ImGui::PushFont(ctx_, theme_fonts_.default_font, 14.0);
+    font_pushed = true;
   }
 
   ImGui::SetNextWindowPos(ctx_, anchor_gui_x - diameter * 0.5, anchor_gui_y - diameter * 0.5,
@@ -515,23 +390,15 @@ void RuntimeWindow::tick() {
   }
   bool wheel_open = true;
   bool wheel_began = false;
-  // #region agent log
-  dbg::Log("C", "RuntimeWindow.cpp:tick", "before wheel Begin", "{\"runId\":\"r3\"}");
-  // #endregion
   if (ImGui::Begin)
     wheel_began = ImGui::Begin(ctx_, kTitle, &wheel_open, WindowFlags(!drag_slot_active_));
   if (color_pushed > 0 && ImGui::PopStyleColor) ImGui::PopStyleColor(ctx_, color_pushed);
   color_pushed = 0;
   if (!wheel_began) {
-    // #region agent log
-    dbg::Log("C", "RuntimeWindow.cpp:tick", "wheel Begin failed", "{}");
-    // #endregion
     pop_frame_styles();
     return;
   }
-  // #region agent log
-  dbg::Log("C", "RuntimeWindow.cpp:tick", "wheel Begin ok", "{}");
-  // #endregion
+  frame_open_ = true;
 
   double mx = 0, my = 0;
   POINT cursor_pt;
@@ -610,14 +477,8 @@ void RuntimeWindow::tick() {
     }
   }
 
-  // #region agent log
-  dbg::Log("C", "RuntimeWindow.cpp:tick", "before DrawWheel", "{}");
-  // #endregion
   DrawWheel(ctx_, draw_cfg, hovered_sector_, active_sector_, is_pinned_, anim_open_,
             sector_expand_.data(), static_cast<int>(sector_expand_.size()));
-  // #region agent log
-  dbg::Log("C", "RuntimeWindow.cpp:tick", "after DrawWheel", "{}");
-  // #endregion
 
   if (show_submenu_ && active_sector_ >= 0 &&
       active_sector_ < static_cast<int>(draw_cfg.sectors.size()) && suppress_render_ <= 0) {
@@ -633,29 +494,20 @@ void RuntimeWindow::tick() {
     if (ImGui::SetNextWindowBgAlpha) ImGui::SetNextWindowBgAlpha(ctx_, 240.0 / 255.0);
     int sub_colors = 0;
     int sub_vars = 0;
-    if (ImGui::PushStyleColor) {
-      ImGui::PushStyleColor(ctx_, ImGui::Col_WindowBg, RgbaToU32(20, 20, 22, 240));
+    if (ImGui::PushStyleColor && ImGui::PopStyleColor) {
+      ImGui::PushStyleColor(ctx_, ImGui::Col_WindowBg, RgbaToU32(25, 25, 28, 245));
       ImGui::PushStyleColor(ctx_, ImGui::Col_Border, RgbaToU32(0, 0, 0, 255));
       sub_colors = 2;
     }
-    if (ImGui::PushStyleVar) {
+    if (ImGui::PushStyleVar && ImGui::PopStyleVar) {
       ImGui::PushStyleVar(ctx_, ImGui::StyleVar_WindowPadding, layout.padding, layout.padding);
       ImGui::PushStyleVar(ctx_, ImGui::StyleVar_ItemSpacing, layout.gap, layout.gap);
       ImGui::PushStyleVar(ctx_, ImGui::StyleVar_WindowRounding, 8);
       ImGui::PushStyleVar(ctx_, ImGui::StyleVar_WindowBorderSize, 1);
-      ImGui::PushStyleVar(ctx_, ImGui::StyleVar_FrameRounding, 4);
-      sub_vars = 5;
+      sub_vars = 4;
     }
     bool sub_open = true;
     const int wheel_flags = drag_slot_active_ ? WindowFlags(false) : WindowFlags(true);
-    // #region agent log
-    {
-      char buf[48];
-      snprintf(buf, sizeof(buf), "{\"sector\":%d,\"slots\":%d}", active_sector_,
-               static_cast<int>(sec.slots.size()));
-      dbg::Log("D", "RuntimeWindow.cpp:tick", "before submenu Begin", buf);
-    }
-    // #endregion
     if (ImGui::Begin(ctx_, "Submenu##lee_rm", &sub_open,
                      ImGui::WindowFlags_NoTitleBar | ImGui::WindowFlags_NoDocking |
                          ImGui::WindowFlags_NoSavedSettings | wheel_flags)) {
@@ -668,12 +520,30 @@ void RuntimeWindow::tick() {
         else sl.type = "empty";
         if (idx > 0 && idx % cols != 0 && ImGui::SameLine) ImGui::SameLine(ctx_);
         const bool filled = (sl.type != "empty");
-        if (!filled && ImGui::PushStyleColor) {
-          ImGui::PushStyleColor(ctx_, ImGui::Col_Button, RgbaToU32(20, 20, 20, 255));
-          ImGui::PushStyleColor(ctx_, ImGui::Col_ButtonHovered, RgbaToU32(30, 30, 30, 255));
-          ImGui::PushStyleColor(ctx_, ImGui::Col_ButtonActive, RgbaToU32(40, 40, 40, 255));
+        int button_colors = 0;
+        int button_vars = 0;
+        if (ImGui::PushStyleColor && ImGui::PopStyleColor) {
+          if (filled) {
+            ImGui::PushStyleColor(ctx_, ImGui::Col_Button, RgbaToU32(60, 62, 66, 255));
+            ImGui::PushStyleColor(ctx_, ImGui::Col_ButtonHovered, RgbaToU32(60, 100, 140, 255));
+            ImGui::PushStyleColor(ctx_, ImGui::Col_ButtonActive, RgbaToU32(40, 60, 80, 255));
+            ImGui::PushStyleColor(ctx_, ImGui::Col_Border, RgbaToU32(85, 85, 90, 100));
+            ImGui::PushStyleColor(ctx_, ImGui::Col_Text, RgbaToU32(180, 180, 180, 255));
+          } else {
+            ImGui::PushStyleColor(ctx_, ImGui::Col_Button, RgbaToU32(30, 30, 32, 100));
+            ImGui::PushStyleColor(ctx_, ImGui::Col_ButtonHovered, RgbaToU32(50, 50, 55, 150));
+            ImGui::PushStyleColor(ctx_, ImGui::Col_ButtonActive, RgbaToU32(60, 60, 65, 150));
+            ImGui::PushStyleColor(ctx_, ImGui::Col_Border, RgbaToU32(60, 60, 60, 60));
+            ImGui::PushStyleColor(ctx_, ImGui::Col_Text, RgbaToU32(128, 128, 128, 200));
+          }
+          button_colors = 5;
         }
-        const std::string label = filled ? (sl.name.empty() ? sl.type : sl.name) : "Empty";
+        if (ImGui::PushStyleVar && ImGui::PopStyleVar) {
+          ImGui::PushStyleVar(ctx_, ImGui::StyleVar_FrameRounding, 4);
+          ImGui::PushStyleVar(ctx_, ImGui::StyleVar_FrameBorderSize, 1);
+          button_vars = 2;
+        }
+        const std::string label = filled ? (sl.name.empty() ? sl.type : sl.name) : "";
         if (ImGui::Button(ctx_, (label + "##s" + std::to_string(idx)).c_str(), layout.slot_w,
                           layout.slot_h)) {
           if (filled) {
@@ -685,7 +555,13 @@ void RuntimeWindow::tick() {
             }
           }
         }
-        if (!filled && ImGui::PopStyleColor) ImGui::PopStyleColor(ctx_, 3);
+        if (button_vars > 0) ImGui::PopStyleVar(ctx_, button_vars);
+        if (button_colors > 0) ImGui::PopStyleColor(ctx_, button_colors);
+        if (filled && ImGui::IsItemHovered && ImGui::IsItemHovered(ctx_) &&
+            ImGui::BeginTooltip && ImGui::BeginTooltip(ctx_)) {
+          ImGui::Text(ctx_, label.c_str());
+          ImGui::EndTooltip(ctx_);
+        }
         if (filled && ImGui::BeginDragDropSource && ImGui::BeginDragDropSource(ctx_)) {
           drag_slot_ = sl;
           drag_slot_active_ = true;
@@ -732,7 +608,9 @@ void RuntimeWindow::tick() {
       management_mode_ = false;
       close();
       ImGui::End(ctx_);
+      frame_open_ = false;
       pop_frame_styles();
+      if (context_release_pending_) invalidate_context();
       return;
     }
     auto it = full_for_mgmt_.presets.find(pname);
@@ -767,11 +645,9 @@ void RuntimeWindow::tick() {
   if (!wheel_open && !is_pinned_) close();
 
   ImGui::End(ctx_);
+  frame_open_ = false;
   pop_frame_styles();
-  try_load_config_file_deferred();
-  // #region agent log
-  dbg::Log("B", "RuntimeWindow.cpp:tick", "tick complete", "{\"runId\":\"r3\",\"ok\":1}");
-  // #endregion
+  if (context_release_pending_) invalidate_context();
 }
 
 }  // namespace lee::radial_menu

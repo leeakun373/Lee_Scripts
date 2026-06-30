@@ -1,7 +1,5 @@
 #include "Register.h"
 
-#include <cstdio>
-
 #include "plugin/AppTimer.h"
 
 #include "plugin/CommandRegistry.h"
@@ -15,7 +13,6 @@
 #include "ui/setup/SetupWindow.h"
 
 #include "shared/UiNotify.h"
-#include "shared/DebugSessionLog.h"
 #include "reaper_imgui_functions.h"
 
 
@@ -33,20 +30,10 @@ void TimerTick() {
     if (runtime.is_active() || runtime.defer_pending()) runtime.tick();
     GetSetupWindow().tick();
   } catch (const ImGui_Error& e) {
-    // #region agent log
-    {
-      char buf[256];
-      snprintf(buf, sizeof(buf), "{\"err\":\"%s\"}", e.what());
-      dbg::Log("B", "Register.cpp:TimerTick", "ImGui_Error caught", buf);
-    }
-    // #endregion
     GetRuntimeWindow().destroy();
     GetSetupWindow().destroy();
     ShowUserMessage(e.what(), "Lee RadialMenu");
   } catch (...) {
-    // #region agent log
-    dbg::Log("B", "Register.cpp:TimerTick", "unknown exception caught", "{}");
-    // #endregion
     GetRuntimeWindow().destroy();
     GetSetupWindow().destroy();
     ShowUserMessage(
@@ -76,9 +63,6 @@ void EnsureTimer() {
 
 
 void OnOpenRadial() {
-  // #region agent log
-  dbg::Log("E", "Register.cpp:OnOpenRadial", "entry", "{\"runId\":\"r3\"}");
-  // #endregion
   if (!lee::reaimgui::Ready()) {
 
     ShowUserMessage(
@@ -92,23 +76,10 @@ void OnOpenRadial() {
   }
 
   EnsureTimer();
-  // #region agent log
-  dbg::Log("E", "Register.cpp:OnOpenRadial", "after EnsureTimer", "{\"runId\":\"post-fix2\"}");
-  // #endregion
 
   const bool was_active = GetRuntimeWindow().is_active();
-  // #region agent log
-  {
-    char buf[32];
-    snprintf(buf, sizeof(buf), "{\"wasActive\":%d}", was_active ? 1 : 0);
-    dbg::Log("E", "Register.cpp:OnOpenRadial", "before open branch", buf);
-  }
-  // #endregion
 
   if (was_active) {
-    // #region agent log
-    dbg::Log("E", "Register.cpp:OnOpenRadial", "toggle dismiss", "{}");
-    // #endregion
     GetRuntimeWindow().dismiss_for_toggle();
     return;
   }
@@ -119,9 +90,6 @@ void OnOpenRadial() {
 
   // Paint on next REAPER timer tick — avoid reentrant ImGui with timer callback.
   (void)GetRuntimeWindow().open_with_hotkey(trigger_time);
-  // #region agent log
-  dbg::Log("E", "Register.cpp:OnOpenRadial", "open_with_hotkey returned", "{\"runId\":\"r3\"}");
-  // #endregion
 
 }
 

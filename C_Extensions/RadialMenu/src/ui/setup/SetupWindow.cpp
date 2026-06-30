@@ -845,10 +845,13 @@ void SetupWindow::draw_inspector() {
       if (lookup <= 0 && !sl.command_name.empty() && api.NamedCommandLookup) {
         lookup = api.NamedCommandLookup(sl.command_name.c_str());
       }
-      if (lookup > 0 && api.CF_GetCommandText) {
-        char namebuf[512] = {};
-        if (api.CF_GetCommandText(nullptr, lookup, namebuf, sizeof(namebuf)) && namebuf[0]) {
-          sl.name = namebuf;
+      if (lookup > 0 && (api.kbd_getTextFromCmd || api.CF_GetCommandText)) {
+        void* section = api.SectionFromUniqueID ? api.SectionFromUniqueID(0) : nullptr;
+        const char* command_text = api.kbd_getTextFromCmd
+                                       ? api.kbd_getTextFromCmd(lookup, section)
+                                       : api.CF_GetCommandText(0, lookup);
+        if (command_text && *command_text) {
+          sl.name = command_text;
         }
       }
       dirty_ = true;
@@ -1098,8 +1101,8 @@ void SetupWindow::tick() {
       bool warm_open = true;
       if (ImGui::Begin(ctx_, "RadialMenu Setup##warm", &warm_open, ImGui::WindowFlags_NoInputs)) {
         if (ImGui::Dummy) ImGui::Dummy(ctx_, 1.0, 1.0);
+        ImGui::End(ctx_);
       }
-      ImGui::End(ctx_);
       native_warmed_ = true;
     } catch (...) {
     }

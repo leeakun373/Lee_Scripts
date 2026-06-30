@@ -28,6 +28,7 @@ class RuntimeWindow {
 
  private:
   void ensure_context();
+  void invalidate_context();
   bool context_is_valid() const;
   void update_animations(double dt);
   bool should_paint() const;
@@ -64,12 +65,9 @@ class RuntimeWindow {
   bool last_paint_valid_ = false;
   bool native_warmed_ = false;
   bool in_tick_ = false;
-  bool config_pending_ = false;
-  bool config_file_deferred_ = false;
-  int config_file_defer_ticks_ = 0;
+  bool frame_open_ = false;
+  bool context_release_pending_ = false;
   void force_reset_config();
-  void ensure_config_loaded();
-  void try_load_config_file_deferred();
 };
 
 RuntimeWindow& GetRuntimeWindow();

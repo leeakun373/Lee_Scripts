@@ -71,6 +71,9 @@ void LoadApiTable(reaper_plugin_info_t* rec) {
   LoadFn(rec, "GetItemFromPoint",                g_api.GetItemFromPoint);
   LoadFn(rec, "GetTrackFromPoint",               g_api.GetTrackFromPoint);
   LoadFn(rec, "Main_openProject",                g_api.Main_openProject);
+  LoadFn(rec, "SectionFromUniqueID",             g_api.SectionFromUniqueID);
+  LoadFn(rec, "kbd_enumerateActions",            g_api.kbd_enumerateActions);
+  LoadFn(rec, "kbd_getTextFromCmd",              g_api.kbd_getTextFromCmd);
   LoadFn(rec, "CF_EnumerateActions",             g_api.CF_EnumerateActions);
   LoadFn(rec, "CF_GetCommandText",               g_api.CF_GetCommandText);
   LoadFn(rec, "EnumInstalledFX",                 g_api.EnumInstalledFX);
